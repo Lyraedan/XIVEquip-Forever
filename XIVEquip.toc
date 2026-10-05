@@ -1,0 +1,123 @@
+## Interface: 16001
+## Title: XIVEquip
+## Notes: Recommends and equips specialization-aware best gear using XIVWeights or Pawn scales, with profiles and preferences.
+## Author: argument.null.ex@gmail.com (aka Code Ninja)
+## Version: 2.0.0
+## SavedVariables: XIVEquip_Settings, XIVEquip_ApiProbe
+## IconTexture: Interface\AddOns\XIVEquip\Assets\icon_blue_128
+# Third-party addons reach XIVEquip:RegisterPolicy (PublicAPI/Policies.lua)
+# via C_AddOns.GetAddOnLocalTable("XIVEquip") -- that call only returns the
+# addon-local table when this is set. Without it, RegisterPolicy exists but
+# is unreachable from outside XIVEquip's own files.
+## AllowAddOnTableAccess: 1
+## Category: Equipment
+## Category-deDE: Ausrüstung
+## Category-esES: Equipo
+## Category-esMX: Equipo
+## Category-frFR: Équipement
+## Category-itIT: Equipaggiamento
+## Category-koKR: 장비
+## Category-ptBR: Equipamento
+## Category-ruRU: Экипировка
+## Category-zhCN: 装备
+## Category-zhTW: 裝備
+
+# Don’t hard-block the addon when Pawn isn’t installed:
+## OptionalDeps: Pawn
+
+# Global (Compat must load before anything that calls the game API)
+Global/Compat.lua
+Global/Settings.lua
+Global/Persistence.lua
+Global/Constants.lua
+Global/Localization.lua
+Global/Logger.lua
+Diagnostics/Perf.lua
+
+# v2 settings profiles
+Profiles/Config.lua
+Integrations/Registry.lua
+
+# Core Modules for Registration and Setup
+Core/GearHooks.lua
+Core/GearCore.lua
+Core/CommandRouter.lua
+Profiles/Commands.lua
+
+# XIVWeights (native valuation model -- see XIVWeights/*.lua doc comments)
+XIVWeights/Model.lua
+XIVWeights/Normalizer.lua
+XIVWeights/Scorer.lua
+XIVWeights/Repository.lua
+XIVWeights/Resolver.lua
+XIVWeights/Builtin/Defaults.lua
+XIVWeights/Config.lua
+XIVWeights/Providers/Default.lua
+XIVWeights/Providers/Manual.lua
+XIVWeights/Providers/Pawn.lua
+XIVWeights/Import/Pawn.lua
+XIVWeights/Import/Serialized.lua
+
+# Policy registry (see Policies/*.lua doc comments)
+Policies/Registry.lua
+PublicAPI/Policies.lua
+Policies/Resolver.lua
+Policies/EvaluationContext/CharacterIdentity.lua
+Policies/EvaluationContext/ArmorProficiency.lua
+Policies/EvaluationContext/ClassSpecWeaponCapabilities.lua
+Policies/EvaluationContext/DualWieldOverride.lua
+Policies/EvaluationContext/WeightsResolution.lua
+Policies/EvaluationContext/ProfilePreferences.lua
+Policies/Candidate/RequiredLevel.lua
+Policies/Candidate/Equippable.lua
+Policies/Candidate/Proficiency.lua
+Policies/Candidate/ArmorProficiency.lua
+Policies/Candidate/JewelryIlvlFloor.lua
+Policies/Candidate/ProfileLists.lua
+Policies/Candidate/SpecAppropriateTrinkets.lua
+Policies/Candidate/SetMembership.lua
+
+# EvaluationContext + candidate normalization
+Evaluation/ContextBuilder.lua
+Evaluation/NormalizedItemCache.lua
+Evaluation/CandidateNormalizer.lua
+Evaluation/CandidateCollector.lua
+Evaluation/CandidateEvaluator.lua
+
+# Generic paired-assignment solver
+Assignments/LoadoutState.lua
+Assignments/Paired.lua
+Assignments/Frontier.lua
+Assignments/Singleton.lua
+Assignments/Groups.lua
+Policies/Assignment/WeaponHandLegality.lua
+
+# Whole-loadout optimizer
+Optimization/LoadoutOptimizer.lua
+Policies/Preference/PreferSetBonuses.lua
+
+# Recommendation planner
+Planning/Runtime.lua
+Planning/Coordinator.lua
+Planning/PlanBuilder.lua
+
+# Addon integrations
+Integrations/Pawn.lua
+
+# Gear execution
+UI/BindConfirmationCard.lua
+Gear/Interface.lua
+
+# Automation Features
+Automation/SpecSwitch.lua
+
+# UI Modules
+UI/SettingsWindow/Window.lua
+UI/MinimapButton.lua
+UI/UI.lua
+
+# Test and diagnostics
+Tests/Regression.lua
+
+# Top Level Module
+XIVEquip.lua
