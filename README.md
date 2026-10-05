@@ -5,7 +5,7 @@
 A rough port of the XIVEquip from CurseForge:
 https://www.curseforge.com/wow/addons/xivequip
 
-I threw this together mainly for my own personal use because I enjoy using the mod on Retail, and I'll have this up at least until the original adds Forever support to theirs.
+I threw this together mainly for my own personal use because I enjoy using the mod on Retail, and I'll have this up at least until the original receives Forever support.
 
 ## License
 
