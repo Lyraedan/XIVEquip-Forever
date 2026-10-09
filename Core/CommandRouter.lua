@@ -481,6 +481,19 @@ C.RegisterRoot("compat", function(_)
     line("Plan pass", "ERROR " .. tostring(planResult))
   end
 
+  do
+    local WConfig = XIVEquip.XIVWeights and XIVEquip.XIVWeights.Config
+    if WConfig and WConfig.ActiveWeaponPrefs then
+      local prefs = WConfig.ActiveWeaponPrefs()
+      line("Weapon prefs", string.format("style=%s type=%s ranged=%s",
+        tostring(prefs.style), tostring(prefs.type), tostring(prefs.ranged)))
+    end
+    local okD, dual = pcall(function() return CanDualWield and CanDualWield() end)
+    line("CanDualWield", okD and tostring(dual) or "n/a")
+    local okI, wielding = pcall(function() return IsDualWielding and IsDualWielding() end)
+    line("IsDualWielding", okI and tostring(wielding) or "n/a")
+  end
+
   local report = {
     capturedAt = (type(date) == "function") and date("%Y-%m-%d %H:%M:%S") or nil,
     interfaceVersion = okBuild and interfaceVersion or nil,

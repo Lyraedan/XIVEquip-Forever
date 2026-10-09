@@ -1,8 +1,8 @@
 ## Interface: 16001
-## Title: XIVEquip Forever
-## Notes: Recommends and equips specialization-aware best gear using XIVWeights or Pawn scales, with profiles and preferences. Adapted to run in WoW Forever
-## Author: Forever version by Lyraedan, XIVEquip by argument.null.ex@gmail.com (aka Code Ninja)
-## Version: 2.0.0
+## Title: XIVEquip
+## Notes: Recommends and equips specialization-aware best gear using XIVWeights or Pawn scales, with profiles and preferences.
+## Author: argument.null.ex@gmail.com (aka Code Ninja)
+## Version: 0.1.0
 ## SavedVariables: XIVEquip_Settings, XIVEquip_ApiProbe
 ## IconTexture: Interface\AddOns\XIVEquip\Assets\icon_blue_128
 # Third-party addons reach XIVEquip:RegisterPolicy (PublicAPI/Policies.lua)
@@ -63,6 +63,7 @@ Policies/Registry.lua
 PublicAPI/Policies.lua
 Policies/Resolver.lua
 Policies/EvaluationContext/CharacterIdentity.lua
+Policies/EvaluationContext/CharacterBuild.lua
 Policies/EvaluationContext/ArmorProficiency.lua
 Policies/EvaluationContext/ClassSpecWeaponCapabilities.lua
 Policies/EvaluationContext/DualWieldOverride.lua
@@ -76,6 +77,8 @@ Policies/Candidate/JewelryIlvlFloor.lua
 Policies/Candidate/ProfileLists.lua
 Policies/Candidate/SpecAppropriateTrinkets.lua
 Policies/Candidate/SetMembership.lua
+Policies/Candidate/PreferWeaponType.lua
+Policies/Candidate/RangedPreference.lua
 
 # EvaluationContext + candidate normalization
 Evaluation/ContextBuilder.lua

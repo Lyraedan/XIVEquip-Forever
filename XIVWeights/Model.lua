@@ -20,9 +20,10 @@ XIVWeights.FEATURES = {
   "leech", "avoidance", "movementSpeed", "indestructible",
   -- Classic-era (WoW: Forever / original Azeroth) combat stats. These do not
   -- exist on modern Retail but are part of the vanilla itemization the addon
-  -- is now scored against; keeping them in the fixed vocabulary lets class
+  -- is now scored against; keeping them in the fixed vocabulary lets build
   -- default scales weight them where providers supply the tokens.
   "attackPower", "rangedAttackPower", "spellPower", "spellHealing", "spirit",
+  "hit", "expertise", "weaponSkill",
   -- weapon properties (9.5)
   "weaponDps", "weaponMinDamage", "weaponMaxDamage", "weaponSwingIntervalSeconds",
 }

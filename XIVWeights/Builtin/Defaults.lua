@@ -1,7 +1,18 @@
 -- XIVWeights/Builtin/Defaults.lua
--- Built-in spec scale templates. These are source-controlled defaults, not
--- user settings. XIVWeights.Config can create editable SavedVariables copies
--- on demand and can reset those copies from this table.
+-- Built-in build scale templates for World of Warcraft: Forever. Forever keeps
+-- the vanilla class model: three talent trees per class and no selectable
+-- specialization exposed to the client API, so scales are keyed by a stable
+-- per-tree "build" ID (not by a Blizzard spec ID, which Forever does not
+-- provide per tree).
+--
+-- These are source-controlled defaults, not user settings. XIVWeights.Config
+-- can create editable SavedVariables copies on demand and reset those copies
+-- from this table.
+--
+-- Stat vocabulary is Forever's: primaries, stamina, armor, spirit, attack /
+-- ranged attack / spell power, bonus healing, and the unified hit / crit plus
+-- the new expertise and weapon-skill ratings. Mastery and versatility do not
+-- exist in Forever and are deliberately absent.
 local addonName, XIVEquip = ...
 XIVEquip.XIVWeights = XIVEquip.XIVWeights or {}
 XIVEquip.XIVWeights.Builtin = XIVEquip.XIVWeights.Builtin or {}
@@ -10,74 +21,112 @@ local XIVWeights = XIVEquip.XIVWeights
 local Defaults = {}
 XIVWeights.Builtin.Defaults = Defaults
 
-Defaults.Version = 3
+Defaults.Version = 1
 
-Defaults.Classes = {
+-- classFile -> ordered list of the class's three Forever talent trees. `id` is
+-- an internal build ID (stable, never a client spec ID); `primary` is the
+-- tree's dominant attribute; `priority` is a descending stat order; and
+-- `weaponDps` controls how weapon damage is weighted ("withPrimary",
+-- "abovePrimary", or omitted).
+Defaults.Builds = {
   WARRIOR = {
-    { id = 71, name = "Arms" },
-    { id = 72, name = "Fury" },
-    { id = 73, name = "Protection" },
+    { id = 1001, name = "Arms", primary = "strength",
+      priority = { "stamina", "criticalStrike", "hit", "attackPower", "expertise", "armor" }, weaponDps = "withPrimary",
+      weapon = { style = "two_hand" } },
+    { id = 1002, name = "Fury", primary = "strength",
+      priority = { "criticalStrike", "stamina", "hit", "attackPower", "expertise" }, weaponDps = "withPrimary",
+      weapon = { style = "dual_wield" } },
+    { id = 1003, name = "Protection", primary = "strength",
+      priority = { "stamina", "armor", "hit", "expertise", "criticalStrike" }, weaponDps = "withPrimary",
+      weapon = { style = "mh_shield" } },
   },
   PALADIN = {
-    { id = 65, name = "Holy" },
-    { id = 66, name = "Protection" },
-    { id = 70, name = "Retribution" },
+    { id = 1004, name = "Holy", primary = "intellect",
+      priority = { "spellHealing", "spirit", "spellPower", "criticalStrike", "stamina" },
+      weapon = { style = "mh_shield" } },
+    { id = 1005, name = "Protection", primary = "strength",
+      priority = { "stamina", "armor", "hit", "intellect", "spellPower", "expertise" }, weaponDps = "withPrimary",
+      weapon = { style = "mh_shield" } },
+    { id = 1006, name = "Retribution", primary = "strength",
+      priority = { "criticalStrike", "stamina", "hit", "attackPower", "spellPower", "expertise" }, weaponDps = "withPrimary",
+      weapon = { style = "two_hand" } },
   },
   HUNTER = {
-    { id = 253, name = "Beast Mastery" },
-    { id = 254, name = "Marksmanship" },
-    { id = 255, name = "Survival" },
+    { id = 1007, name = "Beast Mastery", primary = "agility",
+      priority = { "rangedAttackPower", "criticalStrike", "stamina", "hit" }, weaponDps = "abovePrimary",
+      weapon = { style = "two_hand", ranged = "any" } },
+    { id = 1008, name = "Marksmanship", primary = "agility",
+      priority = { "rangedAttackPower", "criticalStrike", "hit", "stamina" }, weaponDps = "abovePrimary",
+      weapon = { style = "two_hand", ranged = "any" } },
+    { id = 1009, name = "Survival", primary = "agility",
+      priority = { "rangedAttackPower", "criticalStrike", "hit", "stamina" }, weaponDps = "abovePrimary",
+      weapon = { style = "two_hand", ranged = "any" } },
   },
   ROGUE = {
-    { id = 259, name = "Assassination" },
-    { id = 260, name = "Outlaw" },
-    { id = 261, name = "Subtlety" },
+    { id = 1010, name = "Assassination", primary = "agility",
+      priority = { "attackPower", "criticalStrike", "stamina", "hit", "expertise" }, weaponDps = "withPrimary",
+      weapon = { style = "dual_wield" } },
+    { id = 1011, name = "Combat", primary = "agility",
+      priority = { "attackPower", "hit", "criticalStrike", "expertise", "stamina" }, weaponDps = "withPrimary",
+      weapon = { style = "dual_wield" } },
+    { id = 1012, name = "Subtlety", primary = "agility",
+      priority = { "attackPower", "criticalStrike", "hit", "stamina", "expertise" }, weaponDps = "withPrimary",
+      weapon = { style = "dual_wield" } },
   },
   PRIEST = {
-    { id = 256, name = "Discipline" },
-    { id = 257, name = "Holy" },
-    { id = 258, name = "Shadow" },
-  },
-  DEATHKNIGHT = {
-    { id = 250, name = "Blood" },
-    { id = 251, name = "Frost" },
-    { id = 252, name = "Unholy" },
+    { id = 1013, name = "Discipline", primary = "intellect",
+      priority = { "spellHealing", "spirit", "spellPower", "criticalStrike", "stamina" },
+      weapon = { style = "auto" } },
+    { id = 1014, name = "Holy", primary = "intellect",
+      priority = { "spellHealing", "spirit", "spellPower", "criticalStrike", "stamina" },
+      weapon = { style = "auto" } },
+    { id = 1015, name = "Shadow", primary = "intellect",
+      priority = { "spellPower", "hit", "criticalStrike", "spirit", "stamina" },
+      weapon = { style = "auto" } },
   },
   SHAMAN = {
-    { id = 262, name = "Elemental" },
-    { id = 263, name = "Enhancement" },
-    { id = 264, name = "Restoration" },
+    { id = 1016, name = "Elemental", primary = "intellect",
+      priority = { "spellPower", "hit", "criticalStrike", "stamina", "spirit" },
+      weapon = { style = "mh_shield" } },
+    { id = 1017, name = "Enhancement", primary = "agility",
+      priority = { "attackPower", "strength", "criticalStrike", "hit", "expertise", "stamina" }, weaponDps = "withPrimary",
+      weapon = { style = "dual_wield" } },
+    { id = 1018, name = "Restoration", primary = "intellect",
+      priority = { "spellHealing", "spirit", "spellPower", "criticalStrike", "stamina" },
+      weapon = { style = "mh_shield" } },
   },
   MAGE = {
-    { id = 62, name = "Arcane" },
-    { id = 63, name = "Fire" },
-    { id = 64, name = "Frost" },
+    { id = 1019, name = "Arcane", primary = "intellect",
+      priority = { "spellPower", "spirit", "hit", "criticalStrike", "stamina" },
+      weapon = { style = "auto" } },
+    { id = 1020, name = "Fire", primary = "intellect",
+      priority = { "spellPower", "criticalStrike", "hit", "spirit", "stamina" },
+      weapon = { style = "auto" } },
+    { id = 1021, name = "Frost", primary = "intellect",
+      priority = { "spellPower", "hit", "criticalStrike", "spirit", "stamina" },
+      weapon = { style = "auto" } },
   },
   WARLOCK = {
-    { id = 265, name = "Affliction" },
-    { id = 266, name = "Demonology" },
-    { id = 267, name = "Destruction" },
-  },
-  MONK = {
-    { id = 268, name = "Brewmaster" },
-    { id = 269, name = "Windwalker" },
-    { id = 270, name = "Mistweaver" },
+    { id = 1022, name = "Affliction", primary = "intellect",
+      priority = { "spellPower", "hit", "stamina", "criticalStrike" },
+      weapon = { style = "auto" } },
+    { id = 1023, name = "Demonology", primary = "intellect",
+      priority = { "spellPower", "stamina", "hit", "criticalStrike" },
+      weapon = { style = "auto" } },
+    { id = 1024, name = "Destruction", primary = "intellect",
+      priority = { "spellPower", "criticalStrike", "hit", "stamina" },
+      weapon = { style = "auto" } },
   },
   DRUID = {
-    { id = 102, name = "Balance" },
-    { id = 103, name = "Feral" },
-    { id = 104, name = "Guardian" },
-    { id = 105, name = "Restoration" },
-  },
-  DEMONHUNTER = {
-    { id = 577, name = "Havoc" },
-    { id = 581, name = "Vengeance" },
-    { id = 1480, name = "Devourer" },
-  },
-  EVOKER = {
-    { id = 1467, name = "Devastation" },
-    { id = 1468, name = "Preservation" },
-    { id = 1473, name = "Augmentation" },
+    { id = 1025, name = "Balance", primary = "intellect",
+      priority = { "spellPower", "hit", "criticalStrike", "spirit", "stamina" },
+      weapon = { style = "auto" } },
+    { id = 1026, name = "Feral Combat", primary = "agility",
+      priority = { "strength", "attackPower", "criticalStrike", "stamina", "hit" }, weaponDps = "withPrimary",
+      weapon = { style = "two_hand" } },
+    { id = 1027, name = "Restoration", primary = "intellect",
+      priority = { "spellHealing", "spirit", "spellPower", "criticalStrike", "stamina" },
+      weapon = { style = "auto" } },
   },
 }
 
@@ -106,90 +155,38 @@ local function weights(primary, priority, opts)
   return out
 end
 
-local function source(specID, url)
-  return {
-    kind = "xivequip-default",
-    specID = specID,
-    defaultVersion = Defaults.Version,
-    reviewedAt = "2026-08-10",
-    guide = url,
-    refresh = "tools/default-scales/refresh-prompt.md",
-  }
-end
-
-local function scale(specID, classFile, specName, primary, priority, guide, opts)
+local function buildScale(classFile, def)
   return XIVWeights.NewScale({
-    id = "default:spec:" .. tostring(specID),
-    name = specName,
-    source = source(specID, guide),
-    weights = weights(primary, priority, opts),
-    meta = {
-      specID = specID,
+    id = "default:build:" .. tostring(def.id),
+    name = def.name,
+    source = {
+      kind = "xivequip-default",
+      specID = def.id,
       classFile = classFile,
-      specName = specName,
-      primary = primary,
       defaultVersion = Defaults.Version,
-      priority = priority,
-      guide = guide,
-      weaponDpsPriority = opts and opts.weaponDps or nil,
+    },
+    weights = weights(def.primary, def.priority, { weaponDps = def.weaponDps }),
+    meta = {
+      specID = def.id,
+      classFile = classFile,
+      specName = def.name,
+      primary = def.primary,
+      priority = def.priority,
+      weaponDpsPriority = def.weaponDps,
+      defaultVersion = Defaults.Version,
+      weapon = def.weapon or { style = "auto", type = "any", ranged = "any" },
     },
   })
 end
 
-Defaults.Scales = {
-  [71] = scale(71, "WARRIOR", "Arms", "strength", { "criticalStrike", "haste", "mastery", "versatility" }, "https://www.wowhead.com/guide/classes/warrior/arms/stat-priority-pve-dps", { weaponDps = "withPrimary" }),
-  [72] = scale(72, "WARRIOR", "Fury", "strength", { "haste", "mastery", "criticalStrike", "versatility" }, "https://www.wowhead.com/guide/classes/warrior/fury/stat-priority-pve-dps", { weaponDps = "withPrimary" }),
-  [73] = scale(73, "WARRIOR", "Protection", "strength", { "haste", "criticalStrike", "versatility", "mastery" }, "https://www.wowhead.com/guide/classes/warrior/protection/stat-priority-pve-tank"),
-
-  [65] = scale(65, "PALADIN", "Holy", "intellect", { "mastery", { "haste", "criticalStrike" }, "versatility" }, "https://www.wowhead.com/guide/classes/paladin/holy/overview-pve-healer"),
-  [66] = scale(66, "PALADIN", "Protection", "strength", { "haste", "versatility", "mastery", "criticalStrike" }, "https://www.wowhead.com/guide/classes/paladin/protection/stat-priority-pve-tank"),
-  [70] = scale(70, "PALADIN", "Retribution", "strength", { "mastery", "criticalStrike", "haste", "versatility" }, "https://www.wowhead.com/guide/classes/paladin/retribution/stat-priority-pve-dps"),
-
-  [253] = scale(253, "HUNTER", "Beast Mastery", "agility", { "mastery", "criticalStrike", "haste", "versatility" }, "https://www.wowhead.com/guide/classes/hunter/beast-mastery/stat-priority-pve-dps", { weaponDps = "abovePrimary" }),
-  [254] = scale(254, "HUNTER", "Marksmanship", "agility", { "criticalStrike", "mastery", "versatility", "haste" }, "https://www.wowhead.com/guide/classes/hunter/marksmanship/stat-priority-pve-dps"),
-  [255] = scale(255, "HUNTER", "Survival", "agility", { "mastery", { "criticalStrike", "haste" }, "versatility" }, "https://www.wowhead.com/guide/classes/hunter/survival/overview-pve-dps"),
-
-  [259] = scale(259, "ROGUE", "Assassination", "agility", { "criticalStrike", "haste", "mastery", "versatility" }, "https://www.wowhead.com/guide/classes/rogue/assassination/overview-pve-dps"),
-  [260] = scale(260, "ROGUE", "Outlaw", "agility", { "haste", { "criticalStrike", "versatility" }, "mastery" }, "https://www.wowhead.com/guide/classes/rogue/outlaw/overview-pve-dps"),
-  [261] = scale(261, "ROGUE", "Subtlety", "agility", { "mastery", "haste", "criticalStrike", "versatility" }, "https://www.wowhead.com/guide/classes/rogue/subtlety/stat-priority-pve-dps"),
-
-  [256] = scale(256, "PRIEST", "Discipline", "intellect", { "haste", "criticalStrike", "mastery", "versatility" }, "https://www.wowhead.com/guide/classes/priest/discipline/stat-priority-pve-healer"),
-  [257] = scale(257, "PRIEST", "Holy", "intellect", { "criticalStrike", { "versatility", "mastery" }, "haste" }, "https://www.wowhead.com/guide/classes/priest/holy/overview-pve-healer"),
-  [258] = scale(258, "PRIEST", "Shadow", "intellect", { "haste", "mastery", "criticalStrike", "versatility" }, "https://www.wowhead.com/guide/classes/priest/shadow/overview-pve-dps"),
-
-  [250] = scale(250, "DEATHKNIGHT", "Blood", "strength", { "criticalStrike", "mastery", "versatility", "haste" }, "https://www.wowhead.com/guide/classes/death-knight/blood/basics"),
-  [251] = scale(251, "DEATHKNIGHT", "Frost", "strength", { "criticalStrike", "mastery", "haste", "versatility" }, "https://www.wowhead.com/guide/classes/death-knight/frost/basics"),
-  [252] = scale(252, "DEATHKNIGHT", "Unholy", "strength", { "criticalStrike", "mastery", "haste", "versatility" }, "https://www.wowhead.com/guide/classes/death-knight/unholy/basics"),
-
-  [262] = scale(262, "SHAMAN", "Elemental", "intellect", { "mastery", { "criticalStrike", "haste" }, "versatility" }, "https://www.wowhead.com/guide/classes/shaman/elemental/overview-pve-dps"),
-  [263] = scale(263, "SHAMAN", "Enhancement", "agility", { "mastery", "haste", "criticalStrike", "versatility" }, "https://www.wowhead.com/guide/classes/shaman/enhancement/overview-pve-dps"),
-  [264] = scale(264, "SHAMAN", "Restoration", "intellect", { "criticalStrike", { "versatility", "mastery", "haste" } }, "https://www.wowhead.com/guide/classes/shaman/restoration/stat-priority-pve-healer"),
-
-  [62] = scale(62, "MAGE", "Arcane", "intellect", { "mastery", "haste", "criticalStrike", "versatility" }, "https://www.wowhead.com/guide/classes/mage/arcane/stat-priority-pve-dps"),
-  [63] = scale(63, "MAGE", "Fire", "intellect", { "haste", "mastery", "versatility", "criticalStrike" }, "https://www.wowhead.com/guide/classes/mage/fire/stat-priority-pve-dps"),
-  [64] = scale(64, "MAGE", "Frost", "intellect", { "mastery", "criticalStrike", "haste", "versatility" }, "https://www.wowhead.com/guide/classes/mage/frost/stat-priority-pve-dps"),
-
-  [265] = scale(265, "WARLOCK", "Affliction", "intellect", { "haste", "criticalStrike", "versatility", "mastery" }, "https://www.wowhead.com/guide/classes/warlock/affliction/overview-pve-dps"),
-  [266] = scale(266, "WARLOCK", "Demonology", "intellect", { { "haste", "criticalStrike" }, "mastery", "versatility" }, "https://www.wowhead.com/guide/classes/warlock/demonology/stat-priority-pve-dps"),
-  [267] = scale(267, "WARLOCK", "Destruction", "intellect", { "haste", { "mastery", "criticalStrike" }, "versatility" }, "https://www.wowhead.com/guide/classes/warlock/destruction/stat-priority-pve-dps"),
-
-  [268] = scale(268, "MONK", "Brewmaster", "agility", { { "versatility", "criticalStrike", "mastery" }, "haste" }, "https://www.wowhead.com/guide/classes/monk/brewmaster/stat-priority-pve-tank"),
-  [269] = scale(269, "MONK", "Windwalker", "agility", { "haste", { "criticalStrike", "mastery" }, "versatility" }, "https://www.wowhead.com/guide/classes/monk/windwalker/overview-pve-dps"),
-  [270] = scale(270, "MONK", "Mistweaver", "intellect", { "haste", "criticalStrike", "versatility", "mastery" }, "https://www.wowhead.com/guide/classes/monk/mistweaver/overview-pve-healer"),
-
-  [102] = scale(102, "DRUID", "Balance", "intellect", { "mastery", { "criticalStrike", "haste" }, "versatility" }, "https://www.wowhead.com/guide/classes/druid/balance/overview-pve-dps"),
-  [103] = scale(103, "DRUID", "Feral", "agility", { "mastery", { "haste", "criticalStrike" }, "versatility" }, "https://www.wowhead.com/guide/classes/druid/feral/stat-priority-pve-dps"),
-  [104] = scale(104, "DRUID", "Guardian", "agility", { "haste", "versatility", { "mastery", "criticalStrike" } }, "https://www.wowhead.com/guide/classes/druid/guardian/overview-pve-tank"),
-  [105] = scale(105, "DRUID", "Restoration", "intellect", { "haste", "mastery", "criticalStrike", "versatility" }, "https://www.wowhead.com/guide/classes/druid/restoration/stat-priority-pve-healer"),
-
-  [577] = scale(577, "DEMONHUNTER", "Havoc", "agility", { "criticalStrike", "mastery", "haste", "versatility" }, "https://www.wowhead.com/guide/classes/demon-hunter/havoc/stat-priority-pve-dps"),
-  [581] = scale(581, "DEMONHUNTER", "Vengeance", "agility", { "haste", "versatility", "criticalStrike", "mastery" }, "https://www.wowhead.com/guide/classes/demon-hunter/vengeance/basics"),
-  [1480] = scale(1480, "DEMONHUNTER", "Devourer", "intellect", { "haste", "mastery", "criticalStrike", "versatility" }, "https://www.wowhead.com/guide/classes/demon-hunter/devourer/basics"),
-
-  [1467] = scale(1467, "EVOKER", "Devastation", "intellect", { "criticalStrike", { "haste", "mastery" }, "versatility" }, "https://www.wowhead.com/guide/classes/evoker/devastation/overview-pve-dps"),
-  [1468] = scale(1468, "EVOKER", "Preservation", "intellect", { "mastery", "criticalStrike", "haste", "versatility" }, "https://www.wowhead.com/guide/classes/evoker/preservation/stat-priority-pve-healer"),
-  [1473] = scale(1473, "EVOKER", "Augmentation", "intellect", { "criticalStrike", "haste", "mastery", "versatility" }, "https://www.wowhead.com/guide/classes/evoker/augmentation/basics"),
-}
+Defaults.Scales = {}
+Defaults.ByID = {}
+for classFile, defs in pairs(Defaults.Builds) do
+  for _, def in ipairs(defs) do
+    Defaults.Scales[def.id] = buildScale(classFile, def)
+    Defaults.ByID[def.id] = { id = def.id, name = def.name, classFile = classFile, def = def }
+  end
+end
 
 local function copy(value)
   if type(value) ~= "table" then return value end
@@ -198,67 +195,15 @@ local function copy(value)
   return out
 end
 
--- Class-level fallback scales for World of Warcraft: Forever. Forever runs the
--- original Azeroth classes/specializations, whose spec IDs (e.g. 1491 for
--- Warrior) do not match the retail per-spec IDs above. When a resolved spec ID
--- is not one of the retail defaults, use the class's primary-stat default so
--- planning still works out of the box. Users can then customize the scale in
--- the UI or import a Pawn scale for finer control.
-local CLASS_FALLBACK_WEIGHTS = {
-  WARRIOR      = { primary = "strength",  priority = { "stamina", "armor", "criticalStrike", "attackPower" }, weaponDps = "withPrimary" },
-  PALADIN      = { primary = "strength",  priority = { "stamina", "armor", "intellect", "criticalStrike" }, weaponDps = "withPrimary" },
-  HUNTER       = { primary = "agility",   priority = { "stamina", "armor", "rangedAttackPower", "criticalStrike" }, weaponDps = "abovePrimary" },
-  ROGUE        = { primary = "agility",   priority = { "stamina", "armor", "attackPower", "criticalStrike" } },
-  PRIEST       = { primary = "intellect", priority = { "spirit", "stamina", "armor", "spellPower" } },
-  SHAMAN       = { primary = "intellect", priority = { "stamina", "armor", "spellPower", "criticalStrike" } },
-  MAGE         = { primary = "intellect", priority = { "spirit", "stamina", "armor", "spellPower" } },
-  WARLOCK      = { primary = "intellect", priority = { "stamina", "spirit", "armor", "spellPower" } },
-  DRUID        = { primary = "intellect", priority = { "stamina", "spirit", "armor", "spellPower" } },
-  DEATHKNIGHT  = { primary = "strength",  priority = { "stamina", "armor", "criticalStrike", "attackPower" }, weaponDps = "withPrimary" },
-  MONK         = { primary = "agility",   priority = { "stamina", "armor", "attackPower", "criticalStrike" } },
-  DEMONHUNTER  = { primary = "agility",   priority = { "stamina", "armor", "attackPower", "criticalStrike" } },
-  EVOKER       = { primary = "intellect", priority = { "stamina", "spirit", "armor", "spellPower" } },
-}
-
-local function classFallbackScale(classFile, specID, specName)
-  local def = CLASS_FALLBACK_WEIGHTS[classFile]
-  if not def then return nil end
-  local built = scale(
-    specID or ("class:" .. tostring(classFile)),
-    classFile,
-    specName or classFile,
-    def.primary,
-    def.priority,
-    nil,
-    { weaponDps = def.weaponDps }
-  )
-  built.source = { kind = "xivequip-class-default", classFile = classFile, defaultVersion = Defaults.Version }
-  return built
-end
-
 function Defaults.Get(specID)
   local scale = Defaults.Scales[tonumber(specID)]
-  if not scale then
-    -- Class fallback: find the class for an unknown spec ID. The caller may
-    -- also pass a class file directly (e.g. "WARRIOR").
-    local classFile = Defaults.ClassForSpec(specID) or CLASS_FALLBACK_WEIGHTS[specID] and specID or nil
-    if not classFile and type(specID) == "string" and CLASS_FALLBACK_WEIGHTS[specID] then
-      classFile = specID
-    end
-    if classFile then return classFallbackScale(classFile, specID) end
-    return nil
-  end
+  if not scale then return nil end
   return copy(scale)
-end
-
--- Exposed for the spec resolver: a class-based default keyed by classFile.
-function Defaults.ClassFallback(classFile, specID, specName)
-  return classFallbackScale(classFile, specID, specName)
 end
 
 function Defaults.List()
   local out = {}
-  for specID, scaleValue in pairs(Defaults.Scales) do
+  for _, scaleValue in pairs(Defaults.Scales) do
     out[#out + 1] = copy(scaleValue)
   end
   table.sort(out, function(a, b)
@@ -267,21 +212,34 @@ function Defaults.List()
   return out
 end
 
+-- Ordered build definitions for a class (each { id, name }).
 function Defaults.SpecsForClass(classFile)
-  return Defaults.Classes[classFile] or {}
+  return Defaults.Builds[classFile] or {}
 end
 
 function Defaults.ClassForSpec(specID)
   specID = tonumber(specID)
-  for classFile, specs in pairs(Defaults.Classes) do
-    for _, spec in ipairs(specs) do
-      if spec.id == specID then return classFile end
-    end
-  end
-  return nil
+  local entry = specID and Defaults.ByID[specID]
+  return entry and entry.classFile or nil
 end
 
 function Defaults.PrimaryForSpec(specID)
   local scaleValue = Defaults.Scales[tonumber(specID)]
   return scaleValue and scaleValue.meta and scaleValue.meta.primary or nil
+end
+
+-- The default (first) build for a class, as a { id, name } record.
+function Defaults.DefaultBuildForClass(classFile)
+  return (Defaults.Builds[classFile] or {})[1]
+end
+
+-- The build definition (id, name, weights config, weapon config) for a build ID.
+function Defaults.BuildForID(specID)
+  local entry = Defaults.ByID[tonumber(specID)]
+  return entry and entry.def or nil
+end
+
+function Defaults.NameForID(specID)
+  local entry = Defaults.ByID[tonumber(specID)]
+  return entry and entry.name or nil
 end

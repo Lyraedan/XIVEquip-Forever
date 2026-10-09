@@ -208,12 +208,25 @@ local function useEquipmentSet(setName)
   return nil, "use_failed"
 end
 
+-- The character's active build name (Forever keys gear-set naming by build,
+-- not by the client's single class spec).
+local function currentBuildName()
+  local Config = XIVEquip.XIVWeights and XIVEquip.XIVWeights.Config
+  if Config and Config.ActiveBuildID and Config.SpecName then
+    local buildID = Config.ActiveBuildID()
+    local name = buildID and Config.SpecName(buildID)
+    if name and name ~= "" then return name end
+  end
+  return nil
+end
+
 local function currentSpecSetNameIcon()
   local specIndex = API.GetSpecialization and API.GetSpecialization()
-  local specName, specIcon = "Spec", nil
+  local specName = currentBuildName()
+  local specIcon
   if specIndex and API.GetSpecializationInfo then
     local _, sName, _, sIcon = API.GetSpecializationInfo(specIndex)
-    if sName and sName ~= "" then specName = sName end
+    if not specName and sName and sName ~= "" then specName = sName end
     specIcon = sIcon
   end
   return (specName or "Spec") .. ".xive", specIcon or 134400
@@ -239,8 +252,11 @@ function C:_saveSpecSetSoon(delay, result)
     if InCombatLockdown() then return end
 
     -- Re-read the *current* spec now (don't use any captured value)
-    local idx      = API.GetSpecialization()
-    local specName = (idx and select(2, API.GetSpecializationInfo(idx))) or "Unknown"
+    local specName = currentBuildName()
+    if not specName then
+      local idx = API.GetSpecialization and API.GetSpecialization()
+      specName = (idx and API.GetSpecializationInfo and select(2, API.GetSpecializationInfo(idx))) or "Unknown"
+    end
     local setName  = string.format("%s.xive", specName)
 
     if not C_EquipmentSet or not C_EquipmentSet.GetEquipmentSetID then
@@ -433,7 +449,12 @@ function C:_completeEquipRun(result, showEquip, opts)
       if result.pending_data and result.planned_count == 0 then
         printResult(result, opts.pendingMessage or "Item data is still loading; try again shortly.")
       elseif result.planned_count == 0 then
-        printResult(result, L.NoUpgrades or "No upgrades found.")
+        -- A button click with nothing to do should stay silent; only an
+        -- explicit /xive equip prints "No upgrades found." (silentWhenEmpty
+        -- is set by the UI button).
+        if not opts.silentWhenEmpty then
+          printResult(result, L.NoUpgrades or "No upgrades found.")
+        end
       elseif result.succeeded == 0 and (result.failed + result.manual_required + result.timed_out + result.skipped + result.bind_declined) > 0 then
         printResult(result, "Upgrade plan did not complete.")
       end
@@ -696,10 +717,23 @@ function C:_runEquipPlan(plan, opts)
         local changed = newLink ~= oldLink
         local intendedEquipped = (not intendedID) or itemID(newLink) == intendedID
 
-        if changed and intendedEquipped then
+        -- The equipment change may not have landed within verifyDelay even
+        -- though the slot is already unlocked; give it a few bounded retries
+        -- before calling the step a failure.
+        if not intendedEquipped and attempt < maxLockRetries then
+          C_Timer.After(lockDelay, function() verify(attempt + 1) end)
+          return
+        end
+
+        -- Success is determined by the intended item actually being in the
+        -- slot. Comparing link strings is unreliable on some clients (a
+        -- successful equip can leave the link unchanged, or differ only in
+        -- item-string fields), which previously miscounted successes as
+        -- "no_change" failures and produced a spurious "did not complete".
+        if intendedEquipped then
           result.succeeded = result.succeeded + 1
           table.insert(result.steps, { index = index, status = "success", slot = slotID })
-          if showEquip then
+          if showEquip and changed then
             local oldText = oldLink or "|cff888888(None)|r"
             local newText = newLink or "|cff888888(None)|r"
             printResult(result, string.format(L.ReplacedWith or "Replaced %s with %s.", oldText, newText))

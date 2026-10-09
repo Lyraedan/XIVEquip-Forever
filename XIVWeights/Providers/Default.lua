@@ -30,10 +30,10 @@ function Methods:ListScales(context)
 end
 
 function Methods:Resolve(selection, context)
-  local specID = context and context.specID
+  local specID = context and (context.buildID or context.specID)
   if specID and XIVWeights.Builtin and XIVWeights.Builtin.Defaults then
     local scale = XIVWeights.Builtin.Defaults.Get(specID)
     if scale then return scale end
   end
-  error("Default provider: specID is required")
+  error("Default provider: buildID is required")
 end

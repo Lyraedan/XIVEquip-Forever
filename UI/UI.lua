@@ -183,14 +183,13 @@ local function nativeScaleHeader(result)
   if config and config.ResolvedScaleDisplayLabel and scale then
     return config.ResolvedScaleDisplayLabel(scale)
   end
-  local specIndex = API.GetSpecialization and API.GetSpecialization()
-  local specID = specIndex and API.GetSpecializationInfo and select(1, API.GetSpecializationInfo(specIndex))
   local runtime = XIVEquip.Planning and XIVEquip.Planning.Runtime and XIVEquip.Planning.Runtime.Live
       and XIVEquip.Planning.Runtime.Live() or nil
-  local resolved = config and specID and config.ResolveResultForSpec(specID, runtime)
+  local buildID = config and config.ActiveBuildID and config.ActiveBuildID(runtime)
+  local resolved = config and buildID and config.ResolveResultForSpec(buildID, runtime)
   if runtime and runtime.Close then runtime.Close() end
   return config and config.ResolvedScaleDisplayLabel and config.ResolvedScaleDisplayLabel(resolved and resolved.scale)
-      or "Default | current specialization"
+      or "Default | current build"
 end
 
 local PREVIEW_CACHE_SECONDS = 30
@@ -482,9 +481,8 @@ local function createButton()
   btn:SetScript("OnClick", function()
     if XIVEquip.UI and XIVEquip.UI.ClearPreviewCache then XIVEquip.UI.ClearPreviewCache() end
     if XIVEquip and XIVEquip.EquipBestGear then
-      -- Always report the outcome when the player presses the button, even if
-      -- the "Equip messages" preference is off.
-      XIVEquip:EquipBestGear({ showEquip = true })
+      -- The button equips silently: no per-step or summary chat output.
+      XIVEquip:EquipBestGear({ showEquip = false })
     end
   end)
 

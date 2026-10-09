@@ -79,6 +79,24 @@ local function ensureProfiles(st, sourceVersion)
   end
 end
 
+-- Migrate character-keyed maps from the legacy "Name-Realm" form to Forever's
+-- two-part "First Second" name form. Only touches keys with a single dash and
+-- no space, and never overwrites an existing destination key.
+local function migrateCharacterKeys(map)
+  if type(map) ~= "table" then return end
+  local moves = {}
+  for key in pairs(map) do
+    if type(key) == "string" and key:find("%-") and not key:find("%s") then
+      local spaced = key:gsub("%-", " ")
+      if map[spaced] == nil then moves[#moves + 1] = { from = key, to = spaced } end
+    end
+  end
+  for _, move in ipairs(moves) do
+    map[move.to] = map[move.from]
+    map[move.from] = nil
+  end
+end
+
 local function ensure()
   _G.XIVEquip_Settings = _G.XIVEquip_Settings or {}
   local st = _G.XIVEquip_Settings
@@ -122,10 +140,24 @@ local function ensure()
   if st.UI.Minimap.Hidden == nil then st.UI.Minimap.Hidden = false end
   st.UI.Minimap.Angle = tonumber(st.UI.Minimap.Angle) or 220
   st.AutoSpecMap = type(st.AutoSpecMap) == "table" and st.AutoSpecMap or {}
+  st.CharacterBuilds = type(st.CharacterBuilds) == "table" and st.CharacterBuilds or {}
+  st.Builds = type(st.Builds) == "table" and st.Builds or {}
   st.MacroID = st.MacroID or 0
 
   ensureXIVWeights(st)
   ensureProfiles(st, sourceVersion)
+
+  -- Migrate legacy "<first>-<second>" character keys (which treated Forever's
+  -- second name as a realm) to the new "<first> <second>" space form, so
+  -- existing per-character profile assignments and build selections survive.
+  migrateCharacterKeys(st.CharacterBuilds)
+  migrateCharacterKeys(st.Profiles and st.Profiles.CharacterAssignments)
+
+  -- Weapon preferences now live on named Builds; drop the short-lived
+  -- per-character/per-build stores from earlier builds.
+  st.CharacterWeapons = nil
+  st.BuildWeapons = nil
+
 
   st.SelectedComparer = nil
   st.Comparer = nil

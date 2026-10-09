@@ -1,130 +1,55 @@
 -- Policies/EvaluationContext/ClassSpecWeaponCapabilities.lua
--- Ports Gear/Weapons.lua's policyForSpec() (lines 33-106) faithfully into a
--- context policy -- same class/spec branches, same flags. Weapons.lua's own
--- copy is untouched; this is new, parallel infrastructure for Phase 3+ to
--- eventually consume (see Phase 2 plan's scope decisions).
+-- Resolves the eight weapon-hand capability flags for the active build plus the
+-- character's Weapon Preference, then applies Forever's Dual Wield ability
+-- gate.
 --
--- One policy sets all 8 capabilities together rather than 8 separate
--- policies each re-deriving the same interdependent per-spec branch (doc
--- 5.4: capabilities are resolved once per pass -- this is one such
--- resolution, not eight). The live IsDualWielding() override is a separate
--- policy (DualWieldOverride.lua), ordered after this one via requires.
+-- Forever keeps vanilla's weapon model: a class's weapon *proficiency* is
+-- trained (and checked by the proficiency policy via C_PlayerInfo.CanUseItem),
+-- while Dual Wield is a separate trained ability. This policy expresses which
+-- hand combinations the planner may consider; the proficiency policy and the
+-- dual-wield gate below do the actual filtering.
 local addonName, XIVEquip = ...
 
--- classFile -> spec ID -> capability overrides layered onto the defaults
--- below. Mirrors policyForSpec()'s if/elseif chain exactly.
-local SPEC_OVERRIDES = {
-  WARRIOR = {
-    [71] = { allow2H = true, allowMH1H = false },
-    [72] = { allow2H = true, allowDualWield = true, allowOffhandWeapon = true, allowTitanGrip = true },
-    [73] = { allow2H = false, allowMH1H = true, allowShield = true, requireShield = true },
-  },
-  PALADIN = {
-    [65] = { allow2H = false, allowMH1H = true, allowShield = true, allowHoldable = true },
-    [66] = { allow2H = false, allowMH1H = true, allowShield = true, requireShield = true },
-    [70] = { allow2H = true, allowMH1H = false },
-  },
-  DEATHKNIGHT = {
-    [250] = { allow2H = true, allowMH1H = false },
-    [251] = { allow2H = true, allowDualWield = true, allowOffhandWeapon = true },
-    [252] = { allow2H = true, allowMH1H = false },
-  },
-  MONK = {
-    [269] = { allow2H = true, allowDualWield = true, allowOffhandWeapon = true },
-    [268] = { allow2H = true, allowMH1H = true },
-    [270] = { allow2H = true, allowMH1H = true, allowHoldable = true },
-  },
+-- style -> capability flags. `auto` is permissive and relies on the
+-- proficiency policy to drop anything the character cannot actually use.
+local STYLE_FLAGS = {
+  auto = { allow2H = true, allowMH1H = true, allowDualWield = true, allowOffhandWeapon = true, allowShield = true, allowHoldable = true },
+  two_hand = { allow2H = true },
+  dual_wield = { allowMH1H = true, allowDualWield = true, allowOffhandWeapon = true },
+  mh_shield = { allowMH1H = true, allowShield = true },
+  mh_offhand = { allowMH1H = true, allowOffhandWeapon = true, allowHoldable = true },
 }
 
--- classFile -> capability overrides that don't vary by spec.
-local CLASS_OVERRIDES = {
-  ROGUE = { allow2H = false, allowDualWield = true, allowOffhandWeapon = true },
-  DEMONHUNTER = { allow2H = false, allowDualWield = true, allowOffhandWeapon = true },
-  HUNTER = { allow2H = true, allowMH1H = false },
-  MAGE = { allow2H = true, allowMH1H = true, allowHoldable = true },
-  PRIEST = { allow2H = true, allowMH1H = true, allowHoldable = true },
-  WARLOCK = { allow2H = true, allowMH1H = true, allowHoldable = true },
-  EVOKER = { allow2H = true, allowMH1H = true, allowHoldable = true },
-}
-
--- World of Warcraft: Forever (original Azeroth) does not expose the same
--- per-specialization global IDs as Retail: a class reports a single spec
--- (e.g. Warrior = 1491). SPEC_OVERRIDES/CLASS_OVERRIDES are keyed by Retail
--- IDs, so they miss and the code falls through to very restrictive defaults
--- (no offhand/shield), which silently drops legal offhand and shield upgrades.
---
--- These are CLASS-level weapon-hand profiles for the vanilla classes. They are
--- intentionally permissive (the weights and the proficiency policy still
--- decide what is actually worth equipping); their job is only to keep legal
--- hand combinations representable.
-local VANILLA_CLASS_FALLBACK = {
-  WARRIOR = { allow2H = true, allowDualWield = true, allowOffhandWeapon = true, allowShield = true, allowMH1H = true },
-  PALADIN = { allow2H = true, allowShield = true, allowMH1H = true },
-  HUNTER  = { allow2H = true, allowMH1H = true, allowOffhandWeapon = true, allowDualWield = true },
-  ROGUE   = { allow2H = false, allowDualWield = true, allowOffhandWeapon = true },
-  PRIEST  = { allow2H = true, allowMH1H = true, allowHoldable = true },
-  SHAMAN  = { allow2H = true, allowShield = true, allowMH1H = true, allowHoldable = true },
-  MAGE    = { allow2H = true, allowMH1H = true, allowHoldable = true, allowOffhandWeapon = true, allowDualWield = true },
-  WARLOCK = { allow2H = true, allowMH1H = true, allowHoldable = true },
-  DRUID   = { allow2H = true, allowMH1H = true, allowHoldable = true },
-}
-
--- SHAMAN and DRUID key off spec presence/absence rather than a flat class
--- default (policyForSpec()'s `if spec == X then ... else ... end` shape),
--- so they're handled directly in classSpecWeaponProfile below.
-
-local function classSpecWeaponProfile(classFile, specID)
-  local P = {
-    allow2H = true,
-    allowDualWield = false,
-    allowOffhandWeapon = false,
-    allowShield = false,
-    allowHoldable = false,
-    allowMH1H = true,
-    allowTitanGrip = false,
-    requireShield = false,
-  }
-
-  local specOverrides = SPEC_OVERRIDES[classFile] and SPEC_OVERRIDES[classFile][specID]
-  if specOverrides then
-    for key, value in pairs(specOverrides) do P[key] = value end
-  elseif classFile == "SHAMAN" then
-    if specID == 263 then
-      P.allow2H = false; P.allowDualWield = true; P.allowOffhandWeapon = true
-    else
-      P.allow2H = true; P.allowMH1H = true; P.allowShield = true; P.allowHoldable = true
-    end
-  elseif classFile == "DRUID" then
-    if specID == 103 or specID == 104 then
-      P.allow2H = true; P.allowMH1H = false
-    else
-      P.allow2H = true; P.allowMH1H = true; P.allowHoldable = true
-    end
-  elseif CLASS_OVERRIDES[classFile] then
-    for key, value in pairs(CLASS_OVERRIDES[classFile]) do P[key] = value end
-  end
-
-  -- Forever / original-Azeroth: the spec ID is the class's single spec, so the
-  -- Retail-keyed tables above miss. Layer the class-level vanilla profile on
-  -- top of the (restrictive) defaults so legal offhand/shield loadouts remain
-  -- representable.
-  if not specOverrides and not CLASS_OVERRIDES[classFile] then
-    local fallback = VANILLA_CLASS_FALLBACK[classFile]
-    if fallback then
-      for key, value in pairs(fallback) do P[key] = value end
-    end
-  end
-
-  return P
+local function flagsForStyle(style)
+  return STYLE_FLAGS[style] or STYLE_FLAGS.auto
 end
 
-XIVEquip.Policies = XIVEquip.Policies or {}
-XIVEquip.Policies.ClassSpecWeaponProfile = classSpecWeaponProfile
+-- True when the character can put a weapon in the offhand; false when the
+-- client says they cannot; nil when the client exposes no way to tell (in
+-- which case the gate stays out of the way rather than blocking everyone).
+-- Dual Wield is trained (Warrior level 20, Rogue, Enhancement Shaman talent),
+-- so a low-level character reports false even though the class eventually can.
+-- IsDualWielding is checked first so a character mid-dual-wield always passes.
+local function canDualWield()
+  local available = false
+  if type(IsDualWielding) == "function" then
+    available = true
+    local ok, value = pcall(IsDualWielding)
+    if ok and value == true then return true end
+  end
+  if type(CanDualWield) == "function" then
+    available = true
+    local ok, value = pcall(CanDualWield)
+    if ok and value == true then return true end
+  end
+  if available then return false end
+  return nil
+end
 
 XIVEquip:RegisterPolicy({
   id = "XIVEquip.class_spec_weapon_capabilities",
   phase = "evaluation_context",
-  requires = { "character.class_file", "character.spec_id" },
+  requires = { "character.build_id", "weapon.preferences" },
   provides = {
     "capability.XIVEquip.allow_two_hand",
     "capability.XIVEquip.allow_dual_wield",
@@ -136,14 +61,37 @@ XIVEquip:RegisterPolicy({
     "capability.XIVEquip.require_shield",
   },
   apply = function(builder, runtime)
-    local profile = classSpecWeaponProfile(builder:Get("classFile"), builder:Get("specID"))
-    builder:SetCapability("XIVEquip.allow_two_hand", profile.allow2H)
-    builder:SetCapability("XIVEquip.allow_dual_wield", profile.allowDualWield)
-    builder:SetCapability("XIVEquip.allow_offhand_weapon", profile.allowOffhandWeapon)
-    builder:SetCapability("XIVEquip.allow_shield", profile.allowShield)
-    builder:SetCapability("XIVEquip.allow_holdable", profile.allowHoldable)
-    builder:SetCapability("XIVEquip.allow_main_hand_one_hand", profile.allowMH1H)
-    builder:SetCapability("XIVEquip.titan_grip", profile.allowTitanGrip)
-    builder:SetCapability("XIVEquip.require_shield", profile.requireShield)
+    local prefs = builder:Get("weaponPrefs") or {}
+    local flags = flagsForStyle(prefs.style)
+
+    local P = {
+      allow2H = flags.allow2H == true,
+      allowMH1H = flags.allowMH1H == true,
+      allowDualWield = flags.allowDualWield == true,
+      allowOffhandWeapon = flags.allowOffhandWeapon == true,
+      allowShield = flags.allowShield == true,
+      allowHoldable = flags.allowHoldable == true,
+      -- Titan's Grip does not exist in Forever's vanilla model.
+      allowTitanGrip = false,
+      -- A style is a preference, not a hard requirement: allow_shield lets the
+      -- planner use a shield when one is available while still permitting an
+      -- empty offhand when it is not.
+      requireShield = false,
+    }
+
+    if canDualWield() == false then
+      P.allowDualWield = false
+      P.allowOffhandWeapon = false
+      P.allowTitanGrip = false
+    end
+
+    builder:SetCapability("XIVEquip.allow_two_hand", P.allow2H)
+    builder:SetCapability("XIVEquip.allow_dual_wield", P.allowDualWield)
+    builder:SetCapability("XIVEquip.allow_offhand_weapon", P.allowOffhandWeapon)
+    builder:SetCapability("XIVEquip.allow_shield", P.allowShield)
+    builder:SetCapability("XIVEquip.allow_holdable", P.allowHoldable)
+    builder:SetCapability("XIVEquip.allow_main_hand_one_hand", P.allowMH1H)
+    builder:SetCapability("XIVEquip.titan_grip", P.allowTitanGrip)
+    builder:SetCapability("XIVEquip.require_shield", P.requireShield)
   end,
 })

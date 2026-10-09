@@ -93,12 +93,15 @@ function Profiles.DefaultProfileID(classFile)
   return string.lower(normalizeClass(classFile) or "unknown") .. ":default"
 end
 
-function Profiles.CharacterKey(name, realm)
+function Profiles.CharacterKey(name, secondName)
   name = normalizeName(name)
-  realm = normalizeName(realm)
+  secondName = normalizeName(secondName)
   if name == "" then return nil end
-  if realm == "" then realm = "unknown-realm" end
-  return name .. "-" .. realm
+  -- World of Warcraft: Forever uses two-part character names (<first> <second>).
+  -- UnitName returns the two parts; join them with a space rather than treating
+  -- the second part as a realm with a dash.
+  if secondName == "" then return name end
+  return name .. " " .. secondName
 end
 
 function Profiles.EnsureClass(classFile)
@@ -189,7 +192,13 @@ local function currentContext(runtime)
   if (not realm or realm == "") and type(realmName) == "function" then realm = realmName() end
 
   local specID
-  if type(getSpec) == "function" and type(getSpecInfo) == "function" then
+  -- Forever has no per-tree API spec; the active build drives profile/scale
+  -- resolution. Fall back to the client spec ID only if no build resolves.
+  local XWConfig = XIVEquip.XIVWeights and XIVEquip.XIVWeights.Config
+  if XWConfig and XWConfig.ActiveBuildID then
+    specID = XWConfig.ActiveBuildID(runtime)
+  end
+  if not specID and type(getSpec) == "function" and type(getSpecInfo) == "function" then
     local index = getSpec()
     if index then specID = select(1, getSpecInfo(index)) end
   end

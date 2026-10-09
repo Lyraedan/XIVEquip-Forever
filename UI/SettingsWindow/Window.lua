@@ -14,7 +14,7 @@ local TAB_RAIL_WIDTH = 118
 local CONTENT_LEFT = 146
 local CONTENT_WIDTH = 590
 
-local tabs = { "Config", "Scales", "Wishlist", "Avoidlist" }
+local tabs = { "Config", "Builds", "Wishlist", "Avoidlist" }
 
 local function settings()
   return XIVEquip.Settings and XIVEquip.Settings:Get() or _G.XIVEquip_Settings or {}
@@ -24,21 +24,32 @@ local function Config()
   return XIVEquip.XIVWeights and XIVEquip.XIVWeights.Config
 end
 
+-- The character's active Forever build ID (falls back to the client spec ID
+-- only if no build resolves). Forever has no per-tree API spec.
 local function currentSpecID()
+  local C = Config()
+  if C and C.ActiveBuildID then
+    local id = C.ActiveBuildID()
+    if id then return id end
+  end
   local index = API.GetSpecialization and API.GetSpecialization()
   if not index then return nil end
   return API.GetSpecializationInfo and select(1, API.GetSpecializationInfo(index)) or nil
 end
 
 local function currentSpecName()
+  local C = Config()
+  local specID = currentSpecID()
+  if C and C.SpecName then
+    local name = C.SpecName(specID)
+    if name and name ~= "" then return name end
+  end
   local index = API.GetSpecialization and API.GetSpecialization()
   if index and API.GetSpecializationInfo then
     local _, name = API.GetSpecializationInfo(index)
     if name and name ~= "" then return name end
   end
-  local C = Config()
-  local specID = currentSpecID()
-  return C and C.SpecName and C.SpecName(specID) or nil
+  return nil
 end
 
 local function currentClassFile()
@@ -276,9 +287,10 @@ end
 
 local featureGroups = {
   { "Primary", { "strength", "agility", "intellect" } },
-  { "Defensive / Base", { "stamina", "armor", "bonusArmor" } },
-  { "Secondary", { "criticalStrike", "haste", "mastery", "versatility" } },
-  { "Tertiary", { "leech", "avoidance", "movementSpeed", "indestructible" } },
+  { "Base", { "stamina", "armor", "spirit" } },
+  { "Melee / Ranged", { "attackPower", "rangedAttackPower" } },
+  { "Spell", { "spellPower", "spellHealing" } },
+  { "Ratings", { "hit", "criticalStrike", "expertise", "weaponSkill" } },
   { "Weapon", { "weaponDps", "weaponMinDamage", "weaponMaxDamage", "weaponSwingIntervalSeconds" } },
 }
 
@@ -289,10 +301,16 @@ local featureLabels = {
   stamina = "Stamina",
   armor = "Armor",
   bonusArmor = "Bonus Armor",
+  spirit = "Spirit",
+  attackPower = "Attack Power",
+  rangedAttackPower = "Ranged Attack Power",
+  spellPower = "Spell Power",
+  spellHealing = "Bonus Healing",
+  hit = "Hit Chance",
   criticalStrike = "Critical Strike",
+  expertise = "Expertise",
+  weaponSkill = "Weapon Skill",
   haste = "Haste",
-  mastery = "Mastery",
-  versatility = "Versatility",
   leech = "Leech",
   avoidance = "Avoidance",
   movementSpeed = "Movement Speed",
@@ -932,9 +950,10 @@ local function showConfig(content)
   if (not realmName or realmName == "") and GetRealmName then realmName = GetRealmName() end
   local characterName = context and context.characterKey or playerName or "Current character"
   if playerName and realmName and realmName ~= "" then
-    characterName = tostring(playerName) .. " - " .. tostring(realmName)
+    -- Forever names are <first> <second>; join with a space, no dash.
+    characterName = tostring(playerName) .. " " .. tostring(realmName)
   else
-    characterName = tostring(characterName):gsub("^([^%-]+)%-(.+)$", "%1 - %2")
+    characterName = tostring(characterName):gsub("^([^%-]+)%-(.+)$", "%1 %2")
   end
   local specName = (C and C.SpecName and C.SpecName(specID)) or currentSpecName() or "Unknown specialization"
   local header = font(page, "GameFontNormalLarge", tostring(characterName))
@@ -1040,18 +1059,18 @@ local function showConfig(content)
   local mode = profile and profile.manual and string.lower(tostring(profile.manual.mode or "default")) or "default"
   local manualEditable = profile and profile.automatic == false
   local automatic = profile and profile.automatic ~= false
-  local displayMode = mode
+  -- Addon Integrations (Pawn and friends) are unsupported on Forever for now;
+  -- an old saved "integration" mode renders as Default so nothing is exposed.
+  local displayMode = (mode == "integration") and "default" or mode
   local modes = {
-    { id = "default", label = "Default", note = "Use the built-in recommended scale for every specialization." },
-    { id = "custom", label = "Custom", note = "Use Default unless a specialization has its own scale." },
-    { id = "integration", label = "Addon Integration", note = "Use scales from another installed addon." },
+    { id = "default", label = "Default", note = "Use the built-in recommended scale for every build." },
+    { id = "custom", label = "Custom", note = "Use Default unless a build has its own scale." },
   }
-  divider(modePanel, 198, -38, 96)
-  divider(modePanel, 390, -38, 96)
+  divider(modePanel, 194, -38, 96)
   for index, item in ipairs(modes) do
     local selected = profile and displayMode == item.id
     local choice = button(modePanel, item.label, 174, 24)
-    choice:SetPoint("TOPLEFT", 12 + ((index - 1) * 192), -42)
+    choice:SetPoint("TOPLEFT", 14 + ((index - 1) * 192), -42)
     if choice.UnlockHighlight then choice:UnlockHighlight() end
     if selected and choice.LockHighlight then choice:LockHighlight() end
     if not manualEditable then choice:Disable() end
@@ -1062,33 +1081,11 @@ local function showConfig(content)
     note:SetPoint("TOPLEFT", choice, "BOTTOMLEFT", 0, -6)
     note:SetWidth(170)
   end
-  local integrationProvider = profile and profile.manual and profile.manual.integration and profile.manual.integration.provider or "pawn"
-  if profile then
-    local providerLabel = font(modePanel, "GameFontHighlightSmall", "Provider")
-    providerLabel:SetPoint("TOPLEFT", 402, -108)
-    local providerItems = {}
-    for _, entry in ipairs(C and C.ListIntegrations and C.ListIntegrations() or {}) do
-      local available = true
-      if entry.IsAvailable then
-        local ok, value = pcall(entry.IsAvailable, { runtime = runtime, specID = specID })
-        available = ok and value == true
-      end
-      providerItems[#providerItems + 1] = {
-        value = entry.id,
-        label = (entry.label or entry.id) .. (available and "" or " (Unavailable)"),
-        disabled = not available,
-      }
-    end
-    local providerMenu = dropdown(modePanel, 150)
-    providerMenu:SetPoint("TOPLEFT", 402, -122)
-    setDropdown(providerMenu, providerItems, integrationProvider, function(value)
-      Profiles.SetIntegrationProvider(profile, value); Window.ShowTab(1)
-    end)
-    setDropdownEnabled(providerMenu, manualEditable and mode == "integration")
-  end
+  -- Provider selector (Pawn etc.) intentionally omitted: Addon Integrations
+  -- are unsupported in this version and may return later.
 
   local create = button(modePanel, "Create", 72, 22)
-  create:SetPoint("TOPLEFT", 204, -108)
+  create:SetPoint("TOPLEFT", 14, -106)
   create:SetScript("OnClick", function()
     if not C or not specID then return end
     local scale = C.CreateManualScale(uniqueScaleID("manual"), uniqueScaleName(C, specID, tostring(C.SpecName(specID) or "Scale")), nil, specID)
@@ -1105,30 +1102,30 @@ local function showConfig(content)
   local auto = checkbox(modePanel, "Automatic", automatic, function(value)
     if profile then Profiles.SetAutomatic(profile, value); Window.ShowTab(1) end
   end)
-  auto:SetPoint("TOPLEFT", 14, -144)
-  local recommendation = font(modePanel, "GameFontHighlightSmall", "Choose the recommended scale for your spec automatically.")
-  recommendation:SetPoint("TOPLEFT", 36, -164)
+  auto:SetPoint("TOPLEFT", 14, -140)
+  local recommendation = font(modePanel, "GameFontHighlightSmall", "Choose the recommended scale for your build automatically.")
+  recommendation:SetPoint("TOPLEFT", 36, -160)
   textColor(recommendation, 0.4, 1, 0.4)
   local setPreference = checkbox(modePanel, "Prefer set bonuses", preferences.preferSetBonuses == true, function(value)
     if profile then Profiles.SetPreferSetBonuses(profile, value); Window.ShowTab(1) end
   end)
-  setPreference:SetPoint("TOPLEFT", 14, -184)
+  setPreference:SetPoint("TOPLEFT", 14, -182)
   local setPreferenceNote = font(modePanel, "GameFontDisableSmall", "Favor loadouts that complete 2-piece and 4-piece set bonuses.")
-  setPreferenceNote:SetPoint("TOPLEFT", 36, -204)
+  setPreferenceNote:SetPoint("TOPLEFT", 36, -202)
   local specTrinketPreference = checkbox(modePanel, "Prefer spec-appropriate trinkets",
     preferences.preferSpecAppropriateTrinkets == true, function(value)
       if profile and specID then Profiles.SetPreferSpecAppropriateTrinkets(profile, specID, value); Window.ShowTab(1) end
     end)
   specTrinketPreference:SetPoint("TOPLEFT", 14, -224)
   local specTrinketPreferenceNote = font(modePanel, "GameFontDisableSmall",
-    "Enabled by default; hide trinkets Blizzard doesn't consider appropriate for this specialization. Wishlisted trinkets are always shown.")
+    "Enabled by default; hide trinkets Blizzard doesn't consider appropriate for this build. Wishlisted trinkets are always shown.")
   specTrinketPreferenceNote:SetPoint("TOPLEFT", 36, -244)
   specTrinketPreferenceNote:SetWidth(CONTENT_WIDTH - 50)
 
   local specs = defaults and defaults.SpecsForClass(classFile) or {}
   local mapPanel = panel(page, 0, -432, CONTENT_WIDTH, 132)
-  local mappingTitle = displayMode == "custom" and "Custom scale overrides by specialization"
-      or "Integration scales by specialization"
+  local mappingTitle = displayMode == "custom" and "Custom scale overrides by build"
+      or "Integration scales by build"
   sectionTitle(mapPanel, mappingTitle, 14, -14)
   if profile and not manualEditable then
     local stored = font(mapPanel, "GameFontDisableSmall", "Selection disabled while Automatic mode is engaged.")
@@ -1179,31 +1176,6 @@ local function showConfig(content)
           Window.ShowTab(2)
         end
       end)
-    elseif profile and displayMode == "integration" then
-      local overrides = profile.manual.integration.overrides or {}
-      local configuredOverride = overrides[spec.id]
-      local function liveIntegrationItems()
-        return integrationItems(C, integrationProvider, runtime, spec.id)
-      end
-      local function effectiveSelection(items)
-        if not configuredOverride then return "" end
-        for _, item in ipairs(items or {}) do
-          if item.value == configuredOverride then return configuredOverride end
-        end
-        return ""
-      end
-      local initialItems = liveIntegrationItems()
-      if configuredOverride and effectiveSelection(initialItems) == "" then
-        label:SetText(tostring(spec.name) .. " (Recommended fallback)")
-        textColor(label, 1, 0.65, 0.25)
-      end
-      local menu = dropdown(mapPanel, 190)
-      menu:SetPoint("TOPLEFT", 128, mapY + 8)
-      setDropdown(menu, liveIntegrationItems, effectiveSelection, function(value)
-        if value == "" then Profiles.ClearIntegrationOverride(profile, spec.id) else Profiles.SetIntegrationOverride(profile, spec.id, value) end
-        Window.ShowTab(1)
-      end)
-      setDropdownEnabled(menu, manualEditable)
     else
       local value = font(mapPanel, "GameFontDisableSmall", "Default")
       value:SetPoint("TOPLEFT", 128, mapY)
@@ -1337,9 +1309,9 @@ function showImportDialog(specID, C)
         textColor(frame.detected, 1, 0.55, 0.2)
         return
       end
-      if parsed.specID and tonumber(parsed.specID) ~= tonumber(frame.specID) then
-        frame.detected:SetText("Import is for " .. tostring(C.SpecName(parsed.specID) or parsed.specID)
-          .. ". Select that specialization before importing.")
+      if parsed.buildID and tonumber(parsed.buildID) ~= tonumber(frame.specID) then
+        frame.detected:SetText("Import is for " .. tostring(C.SpecName(parsed.buildID) or parsed.buildID)
+          .. ". Select that build before importing.")
         textColor(frame.detected, 1, 0.55, 0.2)
         return
       end
@@ -1367,6 +1339,17 @@ function showImportDialog(specID, C)
         imported.meta.importedFrom = parsed.format
         imported.source = { kind = "manual", importedFrom = parsed.format, specID = frame.specID }
         C.SaveScale(imported)
+        -- Apply any weapon preferences carried by the export to the active
+        -- build when its talent tree matches the imported scale's tree.
+        if type(parsed.weapon) == "table" and C.SetBuildWeaponPref then
+          local active = C.ActiveBuild and C.ActiveBuild()
+          local classFile = currentClassFile()
+          if active and classFile and tonumber(active.treeID) == tonumber(frame.specID) then
+            for _, field in ipairs({ "style", "type", "ranged" }) do
+              if parsed.weapon[field] ~= nil then C.SetBuildWeaponPref(classFile, active.id, field, parsed.weapon[field]) end
+            end
+          end
+        end
         Window.ScaleRevision = (Window.ScaleRevision or 0) + 1
         Window.SelectedSpecID = frame.specID
         Window.SelectedScaleID = imported.id
@@ -1379,7 +1362,7 @@ function showImportDialog(specID, C)
           saveImported(existing)
         else
           StaticPopupDialogs[dialogName] = {
-            text = "Replace existing scale %s for this specialization?",
+            text = "Replace existing scale %s for this build?",
             button1 = "Replace", button2 = "Cancel", timeout = 0, whileDead = true, hideOnEscape = true,
             OnAccept = function() saveImported(existing) end,
           }
@@ -1436,51 +1419,184 @@ local function confirmDeleteScale(scale, usageCount, onConfirm)
   StaticPopup_Show(dialogName, tostring(scale.name or scale.id), tonumber(usageCount) or 0)
 end
 
+local function promptBuildName(titleText, initial, onAccept)
+  if not (StaticPopupDialogs and StaticPopup_Show) then
+    onAccept(initial)
+    return
+  end
+  local dialogName = "XIVEquip_BUILD_NAME"
+  StaticPopupDialogs[dialogName] = {
+    text = titleText,
+    button1 = "OK",
+    button2 = "Cancel",
+    hasEditBox = true,
+    editBoxWidth = 220,
+    maxLetters = 40,
+    OnAccept = function(self)
+      local box = self.GetEditBox and self:GetEditBox()
+      onAccept(box and box:GetText() or initial)
+    end,
+    OnShow = function(self)
+      local box = self.GetEditBox and self:GetEditBox()
+      if box then box:SetText(initial or "") end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+  }
+  StaticPopup_Show(dialogName)
+end
+
 local function showScales(content)
   local C = Config()
-  local specs = specItems()
-  local defaultSpec = currentSpecID() or (specs[1] and specs[1].value)
-  Window.SelectedSpecID = Window.SelectedSpecID or defaultSpec
-  local specID = Window.SelectedSpecID
-  local scales = manualScalesForSpec(C, specID)
-  local selected = Window.SelectedScaleID
+  local classFile = currentClassFile()
+  local builds = (C.ListBuilds and C.ListBuilds(classFile)) or {}
+  local activeBuild = (C.ActiveBuild and C.ActiveBuild()) or builds[1]
+  local buildID = activeBuild and activeBuild.id
+  local treeID = (activeBuild and tonumber(activeBuild.treeID)) or currentSpecID()
+  local weaponPrefs = (C.NormalizeWeapon and C.NormalizeWeapon(activeBuild and activeBuild.weapon, nil))
+      or { style = "auto", type = "any", ranged = "any" }
+
+  local selected = activeBuild and activeBuild.scaleID
   local selectedScale = selected and C.Repository():Get(selected)
-  if not selectedScale or C.GetScaleSpecID(selectedScale) ~= tonumber(specID) then selectedScale = scales[1]; selected = selectedScale and selectedScale.id end
-  Window.SelectedScaleID = selected
-  local viewKey = table.concat({ "scales", tostring(specID), tostring(selected or ""), tostring(Window.ScaleRevision or 0) }, "|")
+  if selectedScale and C.GetScaleSpecID(selectedScale) ~= tonumber(treeID) then selectedScale = nil end
+  local scales = manualScalesForSpec(C, treeID)
+  Window.SelectedScaleID = selectedScale and selectedScale.id
+
+  local viewKey = table.concat({
+    "builds", tostring(buildID), tostring(treeID), tostring(selected or ""),
+    tostring(Window.ScaleRevision or 0),
+    tostring(weaponPrefs.style), tostring(weaponPrefs.type), tostring(weaponPrefs.ranged),
+  }, "|")
   if content.page and content.page._viewKey == viewKey then content.page:Show(); return end
   local page = clearContent(content)
   page._viewKey = viewKey
 
-  local title = font(page, "GameFontNormalLarge", "Scales")
+  local title = font(page, "GameFontNormalLarge", "Builds")
   title:SetPoint("TOPLEFT", 0, 0)
-  local note = font(page, "GameFontHighlightSmall", "Create and edit gear-weight scales for each specialization.")
+  local note = font(page, "GameFontHighlightSmall", "Name builds and choose a talent tree, scale, and weapon preference for each.")
   note:SetPoint("TOPLEFT", 0, -28)
   note:SetWidth(CONTENT_WIDTH)
-  local specLabel = font(page, "GameFontHighlightSmall", "Specialization")
-  specLabel:SetPoint("TOPLEFT", 0, -50)
-  textColor(specLabel, 1, 1, 1)
-  local specMenu = dropdown(page, 150)
-  specMenu:SetPoint("TOPLEFT", 0, -68)
-  setDropdown(specMenu, specs, specID, function(value)
-    Window.SelectedSpecID = tonumber(value); Window.SelectedScaleID = nil; Window.ShowTab(2)
+
+  -- Row 1: Build selector + New/Rename/Delete
+  local buildLabel = font(page, "GameFontHighlightSmall", "Build")
+  buildLabel:SetPoint("TOPLEFT", 0, -50)
+  textColor(buildLabel, 1, 1, 1)
+  local buildItems = {}
+  for _, b in ipairs(builds) do buildItems[#buildItems + 1] = { value = b.id, label = b.name } end
+  local buildMenu = dropdown(page, 150)
+  buildMenu:SetPoint("TOPLEFT", 0, -68)
+  setDropdown(buildMenu, buildItems, buildID, function(value)
+    if C.SetActiveBuildID then C.SetActiveBuildID(value) end
+    Window.ShowTab(2)
   end)
-  local scaleItems = {}
+  local newBuild = button(page, "New", 56, 22)
+  newBuild:SetPoint("TOPLEFT", 184, -68)
+  newBuild:SetScript("OnClick", function()
+    promptBuildName("Name your new build:", tostring(C.SpecName(treeID) or "Build"), function(name)
+      local b = C.CreateBuild and C.CreateBuild(classFile, name, treeID)
+      if b then C.SetActiveBuildID(b.id); Window.ShowTab(2) end
+    end)
+  end)
+  local renameBuild = button(page, "Rename", 68, 22)
+  renameBuild:SetPoint("LEFT", newBuild, "RIGHT", 4, 0)
+  renameBuild:SetScript("OnClick", function()
+    if not activeBuild then return end
+    promptBuildName("Rename build:", tostring(activeBuild.name or "Build"), function(name)
+      if C.RenameBuild then C.RenameBuild(classFile, activeBuild.id, name) end
+      Window.ShowTab(2)
+    end)
+  end)
+  local deleteBuild = button(page, "Delete", 62, 22)
+  deleteBuild:SetPoint("LEFT", renameBuild, "RIGHT", 4, 0)
+  deleteBuild:SetScript("OnClick", function()
+    if not (activeBuild and C.DeleteBuild) then return end
+    C.DeleteBuild(classFile, activeBuild.id)
+    Window.ShowTab(2)
+  end)
+
+  -- Row 2: Talent Tree + Scale
+  local treeLabel = font(page, "GameFontHighlightSmall", "Talent Tree")
+  treeLabel:SetPoint("TOPLEFT", 0, -104)
+  local treeMenu = dropdown(page, 150)
+  treeMenu:SetPoint("TOPLEFT", 0, -122)
+  setDropdown(treeMenu, specItems(), treeID, function(value)
+    if C.SetBuildTree and buildID then C.SetBuildTree(classFile, buildID, tonumber(value)) end
+    Window.ShowTab(2)
+  end)
+
+  local scaleItems = { { value = "", label = "Default (" .. tostring(C.SpecName(treeID) or "tree") .. ")" } }
   for _, scale in ipairs(scales) do scaleItems[#scaleItems + 1] = { value = scale.id, label = scale.name or scale.id } end
   local scaleLabel = font(page, "GameFontHighlightSmall", "Scale")
-  scaleLabel:SetPoint("TOPLEFT", 200, -50)
-  local scaleMenu = dropdown(page, 210)
-  scaleMenu:SetPoint("TOPLEFT", 184, -68)
-  setDropdown(scaleMenu, scaleItems, selected, function(value) Window.SelectedScaleID = value; Window.ShowTab(2) end)
-  local new = button(page, "Create", 68, 22)
-  new:SetPoint("TOPLEFT", 0, -102)
+  scaleLabel:SetPoint("TOPLEFT", 200, -104)
+  local scaleMenu = dropdown(page, 200)
+  scaleMenu:SetPoint("TOPLEFT", 184, -122)
+  setDropdown(scaleMenu, scaleItems, selected or "", function(value)
+    if C.SetBuildScale and buildID then C.SetBuildScale(classFile, buildID, value == "" and nil or value) end
+    Window.ShowTab(2)
+  end)
+
+  -- Weapon preference controls (per build): loadout style, weapon-type
+  -- priority, and ranged preference. Forever's weapon trainers mean the class
+  -- alone doesn't decide the loadout, so the player picks here.
+  local function setWeaponPref(field, value)
+    if C.SetBuildWeaponPref and buildID then C.SetBuildWeaponPref(classFile, buildID, field, value) end
+    Window.ShowTab(2)
+  end
+
+  local styleLabel = font(page, "GameFontHighlightSmall", "Weapon Preference")
+  styleLabel:SetPoint("TOPLEFT", 0, -158)
+  local styleMenu = dropdown(page, 150)
+  styleMenu:SetPoint("TOPLEFT", 0, -176)
+  setDropdown(styleMenu, {
+    { value = "auto", label = "Auto (build default)" },
+    { value = "two_hand", label = "Two-Hander" },
+    { value = "dual_wield", label = "Dual Wield" },
+    { value = "mh_shield", label = "One-Hander + Shield" },
+    { value = "mh_offhand", label = "One-Hander + Off-hand" },
+  }, weaponPrefs.style, function(value) setWeaponPref("style", value) end)
+
+  local typeLabel = font(page, "GameFontHighlightSmall", "Weapon Type")
+  typeLabel:SetPoint("TOPLEFT", 200, -158)
+  local typeMenu = dropdown(page, 150)
+  typeMenu:SetPoint("TOPLEFT", 200, -176)
+  setDropdown(typeMenu, {
+    { value = "any", label = "Any" },
+    { value = "sword", label = "Sword" },
+    { value = "axe", label = "Axe" },
+    { value = "mace", label = "Mace" },
+    { value = "dagger", label = "Dagger" },
+    { value = "staff", label = "Staff" },
+    { value = "polearm", label = "Polearm" },
+    { value = "fist", label = "Fist Weapon" },
+  }, weaponPrefs.type, function(value) setWeaponPref("type", value) end)
+
+  local rangedLabel = font(page, "GameFontHighlightSmall", "Ranged")
+  rangedLabel:SetPoint("TOPLEFT", 400, -158)
+  local rangedMenu = dropdown(page, 150)
+  rangedMenu:SetPoint("TOPLEFT", 400, -176)
+  setDropdown(rangedMenu, {
+    { value = "any", label = "Any" },
+    { value = "bow", label = "Bow" },
+    { value = "gun", label = "Gun" },
+    { value = "crossbow", label = "Crossbow" },
+    { value = "wand", label = "Wand" },
+    { value = "none", label = "None" },
+  }, weaponPrefs.ranged, function(value) setWeaponPref("ranged", value) end)
+
+  local new = button(page, "Create Scale", 96, 22)
+  new:SetPoint("TOPLEFT", 0, -212)
   new:SetScript("OnClick", function()
-    local scale = C.CreateManualScale(uniqueScaleID("manual"), uniqueScaleName(C, specID, tostring(C.SpecName(specID) or "Custom Scale")), nil, specID)
-    if scale then Window.SelectedScaleID = scale.id; Window.ShowTab(2) end
+    local scale = C.CreateManualScale(uniqueScaleID("manual"), uniqueScaleName(C, treeID, tostring(C.SpecName(treeID) or "Custom Scale")), nil, treeID)
+    if scale then
+      if C.SetBuildScale and buildID then C.SetBuildScale(classFile, buildID, scale.id) end
+      Window.SelectedScaleID = scale.id
+      Window.ShowTab(2)
+    end
   end)
   local import = button(page, "Import", 64, 22)
   import:SetPoint("LEFT", new, "RIGHT", 4, 0)
-  import:SetScript("OnClick", function() showImportDialog(specID, C) end)
+  import:SetScript("OnClick", function() showImportDialog(treeID, C) end)
   local export = button(page, "Export", 64, 22)
   export:SetPoint("LEFT", import, "RIGHT", 4, 0)
   export:SetScript("OnClick", function()
@@ -1490,9 +1606,10 @@ local function showScales(content)
     end
     local meta = selectedScale.meta or {}
     local json = encodeJSON({
-      format = "xivequip-scale", version = 1, id = selectedScale.id,
-      name = selectedScale.name, specID = meta.specID, classFile = meta.classFile,
-      specName = meta.specName, weights = selectedScale.weights,
+      format = "xivequip-forever-scale", version = 2, id = selectedScale.id,
+      name = selectedScale.name, buildID = meta.specID or treeID, classFile = meta.classFile,
+      buildName = meta.specName, weights = selectedScale.weights,
+      weapon = weaponPrefs,
     })
     showTextDialog("Export Scale", json)
   end)
@@ -1500,8 +1617,12 @@ local function showScales(content)
   duplicate:SetPoint("LEFT", export, "RIGHT", 4, 0)
   duplicate:SetScript("OnClick", function()
     if selectedScale then
-      local copyScale = C.DuplicateScale(selectedScale.id, uniqueScaleID("manual"), uniqueScaleName(C, specID, tostring(selectedScale.name or "Scale") .. " Copy"))
-      if copyScale then Window.SelectedScaleID = copyScale.id; Window.ShowTab(2) end
+      local copyScale = C.DuplicateScale(selectedScale.id, uniqueScaleID("manual"), uniqueScaleName(C, treeID, tostring(selectedScale.name or "Scale") .. " Copy"))
+      if copyScale then
+        if C.SetBuildScale and buildID then C.SetBuildScale(classFile, buildID, copyScale.id) end
+        Window.SelectedScaleID = copyScale.id
+        Window.ShowTab(2)
+      end
     end
   end)
   local delete = button(page, "Delete", 62, 22)
@@ -1509,21 +1630,21 @@ local function showScales(content)
   delete:SetScript("OnClick", function()
     if not selectedScale then return end
     local Profiles = XIVEquip.Profiles and XIVEquip.Profiles.Config
-    local classFile = currentClassFile()
     local usageCount = scaleUsage(C, Profiles, classFile, selectedScale.id)
     confirmDeleteScale(selectedScale, usageCount, function()
       local ok = C.DeleteScale(selectedScale.id)
       if ok then
+        if C.SetBuildScale and buildID then C.SetBuildScale(classFile, buildID, nil) end
         Window.SelectedScaleID = nil
-        if usageCount > 0 then print(PREFIX .. "Scale deleted. " .. tostring(usageCount) .. " Profile(s) now use Default for this specialization.") end
+        if usageCount > 0 then print(PREFIX .. "Scale deleted. " .. tostring(usageCount) .. " Profile(s) now use Default for this build.") end
         Window.ShowTab(2)
       else print(PREFIX .. "Unable to delete scale.") end
     end)
   end)
 
-  local _, editor = createScroll(page, 0, -136, CONTENT_WIDTH, 500)
+  local _, editor = createScroll(page, 0, -248, CONTENT_WIDTH, 500)
   if not selectedScale then
-    local empty = font(editor, "GameFontHighlight", "No Custom scale exists for this specialization yet. Use New to start from the Default weights.")
+    local empty = font(editor, "GameFontHighlight", "Using the built-in Default weights. Create a Custom scale to edit them.")
     empty:SetPoint("TOPLEFT", 12, -12)
     editor:SetHeight(500)
     return
@@ -1587,6 +1708,12 @@ local function showScales(content)
     end
     local suppress = true
     local initial = tonumber(work[feature]) or 0
+    -- Detach the previous render's handler before setting the value. A pooled
+    -- slider is reused across scale changes, and its stale OnValueChanged
+    -- (whose suppress flag is already false) would otherwise fire here,
+    -- commit into the previous scale and snap the slider back -- making a
+    -- newly selected scale appear not to update.
+    slider:SetScript("OnValueChanged", nil)
     slider:SetValue(initial)
     suppress = false
     local function restore(value)
@@ -1927,7 +2054,7 @@ function Window.Create()
 
   local title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   title:SetPoint("LEFT", frame.TitleBg, "LEFT", 6, 0)
-  title:SetText("XIVEquip - Settings")
+  title:SetText("XIVEquip Forever - Settings")
 
   local sidebar = CreateFrame("Frame", nil, frame)
   sidebar:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -40)
@@ -1943,7 +2070,7 @@ function Window.Create()
   logo:SetTexture("Interface\\AddOns\\XIVEquip\\Assets\\icon_blue_128")
   local brand = sidebar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   brand:SetPoint("TOP", logo, "BOTTOM", 0, -8)
-  brand:SetText("XIVEquip")
+  brand:SetText("XIVEquip Forever")
   local version
   if API.GetAddOnMetadata then
     version = API.GetAddOnMetadata(addonName, "Version")

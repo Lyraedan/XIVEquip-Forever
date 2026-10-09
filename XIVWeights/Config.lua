@@ -20,6 +20,261 @@ local function settings()
   return _G.XIVEquip_Settings
 end
 
+local function characterKeyFor(runtime)
+  runtime = runtime or {}
+  local unitName = runtime.UnitName or _G.UnitName
+  local realmName = runtime.GetRealmName or _G.GetRealmName
+  local name, realm
+  if type(unitName) == "function" then name, realm = unitName("player") end
+  if (not realm or realm == "") and type(realmName) == "function" then realm = realmName() end
+  local Profiles = XIVEquip.Profiles and XIVEquip.Profiles.Config
+  if Profiles and Profiles.CharacterKey then return Profiles.CharacterKey(name, realm) end
+  return name and (tostring(name) .. (realm and realm ~= "" and (" " .. tostring(realm)) or "")) or nil
+end
+
+local function classFileFor(runtime)
+  runtime = runtime or {}
+  local unitClass = runtime.UnitClass or _G.UnitClass
+  if type(unitClass) == "function" then
+    local _, classFile = unitClass("player")
+    return classFile
+  end
+  return nil
+end
+
+-- =========================
+-- Builds (named, per class) + active build (per character)
+-- =========================
+-- A Build ties a Talent Tree, a Scale, and weapon preferences together.
+-- `CharacterBuilds[characterKey]` stores the active build for the character.
+-- style  : auto | two_hand | dual_wield | mh_shield | mh_offhand
+-- type   : any | sword | axe | mace | dagger | staff | polearm | fist
+-- ranged : any | bow | gun | crossbow | wand | none
+local WEAPON_STYLES = {
+  auto = true, two_hand = true, dual_wield = true, mh_shield = true, mh_offhand = true,
+}
+local WEAPON_TYPES = {
+  any = true, sword = true, axe = true, mace = true, dagger = true,
+  staff = true, polearm = true, fist = true,
+}
+local RANGED_TYPES = {
+  any = true, bow = true, gun = true, crossbow = true, wand = true, none = true,
+}
+Config.WeaponStyles = WEAPON_STYLES
+Config.WeaponTypes = WEAPON_TYPES
+Config.RangedTypes = RANGED_TYPES
+
+local DEFAULT_WEAPON = { style = "auto", type = "any", ranged = "any" }
+
+local function normalizeWeapon(stored, def)
+  def = def or DEFAULT_WEAPON
+  local function pick(field, valid, fallback)
+    local value = type(stored) == "table" and stored[field]
+    if valid[value] then return value end
+    if valid[def[field]] then return def[field] end
+    return fallback
+  end
+  return {
+    style = pick("style", WEAPON_STYLES, "auto"),
+    type = pick("type", WEAPON_TYPES, "any"),
+    ranged = pick("ranged", RANGED_TYPES, "any"),
+  }
+end
+Config.NormalizeWeapon = normalizeWeapon
+
+local function treeWeapon(treeID)
+  local defaults = XIVWeights.Builtin and XIVWeights.Builtin.Defaults
+  local def = defaults and defaults.BuildForID and defaults.BuildForID(treeID)
+  return def and def.weapon or nil
+end
+
+local function buildsStore(classFile)
+  classFile = classFile and string.upper(tostring(classFile)) or nil
+  if not classFile then return nil end
+  local st = settings()
+  st.Builds = type(st.Builds) == "table" and st.Builds or {}
+  local store = type(st.Builds[classFile]) == "table" and st.Builds[classFile] or nil
+  if not store then
+    store = { Items = {} }
+    st.Builds[classFile] = store
+  end
+  store.Items = type(store.Items) == "table" and store.Items or {}
+  return store
+end
+
+-- Ensure a class has a default build for each of its talent trees.
+function Config.EnsureClassBuilds(classFile)
+  local store = buildsStore(classFile)
+  if not store then return nil end
+  local defaults = XIVWeights.Builtin and XIVWeights.Builtin.Defaults
+  for _, tree in ipairs((defaults and defaults.SpecsForClass(classFile)) or {}) do
+    local id = "tree:" .. tostring(tree.id)
+    if store.Items[id] == nil then
+      store.Items[id] = {
+        id = id,
+        name = tree.name or ("Tree " .. tostring(tree.id)),
+        treeID = tree.id,
+        scaleID = nil,
+        weapon = normalizeWeapon(tree.weapon, DEFAULT_WEAPON),
+      }
+    end
+  end
+  return store
+end
+
+function Config.ListBuilds(classFile)
+  local store = Config.EnsureClassBuilds(classFile)
+  local out = {}
+  if not store then return out end
+  for _, build in pairs(store.Items) do out[#out + 1] = build end
+  table.sort(out, function(a, b)
+    local at, bt = tonumber(a.treeID) or 0, tonumber(b.treeID) or 0
+    if at ~= bt then return at < bt end
+    return tostring(a.name) < tostring(b.name)
+  end)
+  return out
+end
+
+function Config.GetBuild(classFile, buildID)
+  local store = Config.EnsureClassBuilds(classFile)
+  return store and buildID and store.Items[buildID] or nil
+end
+
+function Config.FindBuild(buildID)
+  local st = settings()
+  st.Builds = type(st.Builds) == "table" and st.Builds or {}
+  for _, store in pairs(st.Builds) do
+    if type(store) == "table" and type(store.Items) == "table" and store.Items[buildID] then
+      return store.Items[buildID]
+    end
+  end
+  return nil
+end
+
+function Config.CreateBuild(classFile, name, treeID)
+  local store = Config.EnsureClassBuilds(classFile)
+  if not store then return nil end
+  local defaults = XIVWeights.Builtin and XIVWeights.Builtin.Defaults
+  treeID = tonumber(treeID)
+  if not treeID then
+    local first = defaults and defaults.DefaultBuildForClass(classFile)
+    treeID = first and first.id
+  end
+  if not (defaults and treeID and defaults.ByID[treeID]) then return nil end
+  store._seq = (store._seq or 0) + 1
+  local id = "build:" .. tostring(treeID) .. ":" .. tostring(store._seq)
+  local def = defaults.BuildForID and defaults.BuildForID(treeID)
+  local build = {
+    id = id,
+    name = tostring(name or (def and def.name) or "Build"),
+    treeID = treeID,
+    scaleID = nil,
+    weapon = normalizeWeapon(def and def.weapon, DEFAULT_WEAPON),
+  }
+  store.Items[id] = build
+  return build
+end
+
+function Config.RenameBuild(classFile, buildID, name)
+  local build = Config.GetBuild(classFile, buildID)
+  if not build then return false end
+  name = tostring(name or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if name == "" then return false end
+  build.name = name
+  return true
+end
+
+function Config.DeleteBuild(classFile, buildID)
+  local store = Config.EnsureClassBuilds(classFile)
+  if not (store and store.Items[buildID]) then return false end
+  store.Items[buildID] = nil
+  local st = settings()
+  st.CharacterBuilds = type(st.CharacterBuilds) == "table" and st.CharacterBuilds or {}
+  for key, id in pairs(st.CharacterBuilds) do
+    if id == buildID then st.CharacterBuilds[key] = nil end
+  end
+  return true
+end
+
+function Config.SetBuildTree(classFile, buildID, treeID)
+  local build = Config.GetBuild(classFile, buildID)
+  local defaults = XIVWeights.Builtin and XIVWeights.Builtin.Defaults
+  treeID = tonumber(treeID)
+  if not (build and treeID and defaults and defaults.ByID[treeID]) then return false end
+  build.treeID = treeID
+  return true
+end
+
+function Config.SetBuildScale(classFile, buildID, scaleID)
+  local build = Config.GetBuild(classFile, buildID)
+  if not build then return false end
+  build.scaleID = scaleID
+  return true
+end
+
+function Config.SetBuildWeaponPref(classFile, buildID, field, value)
+  local build = Config.GetBuild(classFile, buildID)
+  if not build then return false end
+  build.weapon = type(build.weapon) == "table" and build.weapon or {}
+  build.weapon[field] = value
+  local UI = XIVEquip.UI
+  if UI and type(UI.ClearPreviewCache) == "function" then UI.ClearPreviewCache() end
+  return true
+end
+
+-- The active build record for the character, defaulting to the class's first
+-- tree.
+function Config.ActiveBuild(runtime)
+  local classFile = classFileFor(runtime)
+  if not classFile then return nil end
+  local store = Config.EnsureClassBuilds(classFile)
+  if not store then return nil end
+  local st = settings()
+  st.CharacterBuilds = type(st.CharacterBuilds) == "table" and st.CharacterBuilds or {}
+  local key = characterKeyFor(runtime)
+  local stored = key and st.CharacterBuilds[key]
+  -- Migrate the earlier numeric (talent-tree id) value to a build id.
+  if type(stored) == "number" then
+    local id = "tree:" .. tostring(stored)
+    if store.Items[id] then
+      stored = id
+      if key then st.CharacterBuilds[key] = id end
+    end
+  end
+  if type(stored) == "string" and store.Items[stored] then return store.Items[stored] end
+  local defaults = XIVWeights.Builtin and XIVWeights.Builtin.Defaults
+  local firstTree = defaults and defaults.DefaultBuildForClass(classFile)
+  local build = firstTree and store.Items["tree:" .. tostring(firstTree.id)] or next(store.Items)
+  if build and key then st.CharacterBuilds[key] = build.id end
+  return build
+end
+
+-- Talent-tree id of the active build (used for scale + profile resolution).
+function Config.ActiveBuildID(runtime)
+  local build = Config.ActiveBuild(runtime)
+  return build and tonumber(build.treeID) or nil
+end
+
+function Config.SetActiveBuildID(buildID, runtime)
+  local build = Config.FindBuild(buildID)
+  if not build then return false end
+  local st = settings()
+  st.CharacterBuilds = type(st.CharacterBuilds) == "table" and st.CharacterBuilds or {}
+  local key = characterKeyFor(runtime)
+  if not key then return false end
+  st.CharacterBuilds[key] = build.id
+  local UI = XIVEquip.UI
+  if UI and type(UI.ClearPreviewCache) == "function" then UI.ClearPreviewCache() end
+  return true
+end
+
+-- Weapon preferences for the character's active build.
+function Config.ActiveWeaponPrefs(runtime)
+  local build = Config.ActiveBuild(runtime)
+  if not build then return normalizeWeapon(nil, nil) end
+  return normalizeWeapon(build.weapon, treeWeapon(build.treeID))
+end
+
 local function profilesConfig()
   return XIVEquip.Profiles and XIVEquip.Profiles.Config
 end
@@ -38,9 +293,24 @@ local function weightsSettings()
   st.XIVWeights = type(st.XIVWeights) == "table" and st.XIVWeights or {}
   st.XIVWeights.Scales = type(st.XIVWeights.Scales) == "table" and st.XIVWeights.Scales or {}
   st.XIVWeights.Specs = type(st.XIVWeights.Specs) == "table" and st.XIVWeights.Specs or {}
+  st.XIVWeights.SelectedScales = type(st.XIVWeights.SelectedScales) == "table" and st.XIVWeights.SelectedScales or {}
   st.XIVWeights.Integrations = type(st.XIVWeights.Integrations) == "table" and st.XIVWeights.Integrations or {}
   st.XIVWeights.Integrations.Pawn = type(st.XIVWeights.Integrations.Pawn) == "table" and st.XIVWeights.Integrations.Pawn or {}
   return st.XIVWeights
+end
+
+-- The last scale the user had selected in the Scales editor for a build, so it
+-- survives logout/reload.
+function Config.GetSelectedScaleID(buildID)
+  local xw = weightsSettings()
+  return xw.SelectedScales[tonumber(buildID)]
+end
+
+function Config.SetSelectedScaleID(buildID, scaleID)
+  local key = tonumber(buildID)
+  if not key then return end
+  local xw = weightsSettings()
+  xw.SelectedScales[key] = scaleID
 end
 
 local function generatedID(specID)
@@ -328,6 +598,9 @@ function Config.CreateManualScale(id, name, weights, specID)
       specID = specID,
       classFile = default and default.meta and default.meta.classFile or nil,
       specName = default and default.meta and default.meta.specName or nil,
+      -- Start from the build's recommended weapon loadout so a new scale
+      -- carries sensible weapon preferences.
+      weapon = default and default.meta and default.meta.weapon or nil,
     },
   })
   local ok, err = Config.ValidateAuthoredWeights(scale)
@@ -485,16 +758,6 @@ function Config.ResolveResultForSpec(specID, runtime)
     scale = XIVWeights.Builtin and XIVWeights.Builtin.Defaults and XIVWeights.Builtin.Defaults.Get(specID)
     fallback = true
     fallbackReason = fallbackReason or "scale-unavailable"
-  end
-  if not scale then
-    -- Forever uses spec IDs that don't match the retail defaults. Fall back to
-    -- a class-level default scale so planning still works out of the box.
-    local _, classFile = UnitClass("player")
-    scale = XIVWeights.Builtin and XIVWeights.Builtin.Defaults
-        and XIVWeights.Builtin.Defaults.ClassFallback
-        and XIVWeights.Builtin.Defaults.ClassFallback(classFile, specID, Config.SpecName(specID))
-    fallback = true
-    fallbackReason = fallbackReason or "class-default"
   end
   if not scale then
     scale = XIVWeights.NewScale({ id = "fallback:empty", source = { kind = "empty" }, weights = {} })

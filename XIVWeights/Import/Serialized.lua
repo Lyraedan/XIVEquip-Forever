@@ -9,18 +9,27 @@ local XIVWeights = XIVEquip.XIVWeights
 local Serialized = {}
 XIVWeights.Import.Serialized = Serialized
 
+-- Stat-name aliases for the Forever vocabulary (Classic stats; no mastery or
+-- versatility, which do not exist in Forever).
 local aliases = {
   strength = "strength", str = "strength",
   agility = "agility", agi = "agility",
   intellect = "intellect", int = "intellect",
   stamina = "stamina", sta = "stamina",
   armor = "armor",
+  spirit = "spirit", spi = "spirit",
   bonusarmor = "bonusArmor", bonus_armour = "bonusArmor",
+  attackpower = "attackPower", ap = "attackPower",
+  rangedattackpower = "rangedAttackPower", rap = "rangedAttackPower",
+  spellpower = "spellPower", sp = "spellPower", spelldamage = "spellPower",
+  spellhealing = "spellHealing", healing = "spellHealing", bonushealing = "spellHealing",
+  hit = "hit", hitrating = "hit", hitchance = "hit",
+  expertise = "expertise", expertiserating = "expertise",
+  weaponskill = "weaponSkill", weaponskillrating = "weaponSkill",
+  meleeweaponskillrating = "weaponSkill",
   criticalstrike = "criticalStrike", crit = "criticalStrike", critical = "criticalStrike",
   criticalstrikerating = "criticalStrike", critrating = "criticalStrike",
   haste = "haste", hasting = "haste", hasterating = "haste",
-  mastery = "mastery", masteryrating = "mastery",
-  versatility = "versatility", vers = "versatility", versatilityrating = "versatility", versrating = "versatility",
   leech = "leech", leechrating = "leech", avoidance = "avoidance", avoidancerating = "avoidance", movementspeed = "movementSpeed",
   indestructible = "indestructible",
   weapondps = "weaponDps", dps = "weaponDps", weapondamage = "weaponDps",
@@ -175,7 +184,7 @@ end
 -- item level, and secondaries mainly matter for comparing items of similar
 -- item level, so the big first drop reflects that split instead of
 -- implying rank 2 is only marginally behind rank 1.
-local function fromPriorityList(tokens, requestedSpecID)
+local function fromPriorityList(tokens, requestedBuildID)
   local weights = {}
   local remaining = #tokens - 1
   for i, token in ipairs(tokens) do
@@ -187,7 +196,7 @@ local function fromPriorityList(tokens, requestedSpecID)
       weights[feature] = 0.5 * (remaining - rankAmongRest + 1) / remaining
     end
   end
-  return { format = "priority-list", name = nil, specID = tonumber(requestedSpecID), weights = weights }
+  return { format = "priority-list", name = nil, buildID = tonumber(requestedBuildID), weights = weights }
 end
 
 local function normalizeWeights(raw)
@@ -206,7 +215,7 @@ local function normalizeWeights(raw)
   return weights
 end
 
-local function fromJSON(text, requestedSpecID)
+local function fromJSON(text, requestedBuildID)
   local payload, reason = jsonDecode(text)
   if type(payload) ~= "table" or type(payload.weights) ~= "table" then return nil, reason or "missing-weights" end
   local weights, weightReason = normalizeWeights(payload.weights)
@@ -214,12 +223,13 @@ local function fromJSON(text, requestedSpecID)
   return {
     format = "native-json",
     name = payload.name,
-    specID = tonumber(payload.specID) or tonumber(requestedSpecID),
+    buildID = tonumber(payload.buildID) or tonumber(requestedBuildID),
+    weapon = type(payload.weapon) == "table" and payload.weapon or nil,
     weights = weights,
   }
 end
 
-local function fromText(text, requestedSpecID, format)
+local function fromText(text, requestedBuildID, format)
   local raw = {}
   for key, value in tostring(text):gmatch("([%a][%w_%-]*)%s*[:=]%s*([%+%-]?[%d%.]+)") do
     raw[key] = parseNumber(value)
@@ -228,7 +238,7 @@ local function fromText(text, requestedSpecID, format)
   local weights, reason = normalizeWeights(raw)
   if not weights then return nil, reason end
   local name = tostring(text):match("[Pp]awn:%s*[Vv]%d+:%s*%\"([^\"]+)%\"")
-  return { format = format or "text", name = name, specID = tonumber(requestedSpecID), weights = weights }
+  return { format = format or "text", name = name, buildID = tonumber(requestedBuildID), weights = weights }
 end
 
 function Serialized.Detect(text)
@@ -245,12 +255,12 @@ function Serialized.Detect(text)
   return "text"
 end
 
-function Serialized.Parse(text, requestedSpecID)
+function Serialized.Parse(text, requestedBuildID)
   local format, reason = Serialized.Detect(text)
   if not format then return nil, reason end
-  if format == "native-json" then return fromJSON(text, requestedSpecID) end
-  if format == "priority-list" then return fromPriorityList(tokenizePriorityList(text), requestedSpecID) end
-  return fromText(text, requestedSpecID, format)
+  if format == "native-json" then return fromJSON(text, requestedBuildID) end
+  if format == "priority-list" then return fromPriorityList(tokenizePriorityList(text), requestedBuildID) end
+  return fromText(text, requestedBuildID, format)
 end
 
 return Serialized

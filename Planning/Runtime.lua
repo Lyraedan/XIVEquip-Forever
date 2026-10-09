@@ -35,6 +35,14 @@ function Runtime.Live()
   runtime.UnitLevel = function(unit) return call(_G.UnitLevel, unit) end
   runtime.IsDualWielding = function() return call(API and API.IsDualWielding) end
 
+  -- The active Forever build (per-character setting) that drives scale and
+  -- preference resolution. Forever exposes no per-tree spec via the API.
+  runtime.ActiveBuildID = function()
+    local Config = XIVEquip.XIVWeights and XIVEquip.XIVWeights.Config
+    if Config and Config.ActiveBuildID then return Config.ActiveBuildID(runtime) end
+    return nil
+  end
+
   runtime.PawnProvider = function()
     if sharedPawnProvider then return sharedPawnProvider end
     local Pawn = XIVEquip.Pawn
@@ -69,10 +77,23 @@ function Runtime.Live()
   end
 
   runtime.ResolveWeights = function()
-    local specIndex = runtime.GetSpecialization()
-    local specID = specIndex and runtime.GetSpecializationInfo(specIndex)
-    if specID and XIVEquip.XIVWeights and XIVEquip.XIVWeights.Config then
-      return XIVEquip.XIVWeights.Config.ResolveForSpec(specID, runtime)
+    local Config = XIVEquip.XIVWeights and XIVEquip.XIVWeights.Config
+    local build = Config and Config.ActiveBuild and Config.ActiveBuild(runtime)
+    if build then
+      local treeID = tonumber(build.treeID)
+      local scale
+      -- A build can pin a specific scale; otherwise the tree's default is used.
+      if build.scaleID and Config.Repository then
+        local pinned = Config.Repository():Get(build.scaleID)
+        if pinned then
+          local defaults = XIVEquip.XIVWeights.Builtin and XIVEquip.XIVWeights.Builtin.Defaults
+          scale = XIVEquip.XIVWeights.Resolver.Resolve(pinned, defaults and defaults.Get(treeID))
+        end
+      end
+      if not scale and treeID and Config.ResolveForSpec then
+        scale = Config.ResolveForSpec(treeID, runtime)
+      end
+      if scale then return scale end
     end
     return XIVEquip.XIVWeights.NewScale({ id = "fallback:empty", source = { kind = "empty" }, weights = {} })
   end

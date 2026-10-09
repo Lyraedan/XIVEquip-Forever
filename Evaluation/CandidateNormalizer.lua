@@ -48,17 +48,21 @@ mapToken(STAT_TOKEN_MAP, "RESISTANCE0_NAME", "armor")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_BONUS_ARMOR_SHORT", "bonusArmor")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_CRIT_RATING", "criticalStrike")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_CRIT_RATING_SHORT", "criticalStrike")
+-- Forever unifies melee/spell/ranged crit into one stat; accept the split
+-- token names too in case the client still emits them.
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_CRIT_MELEE_RATING", "criticalStrike")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_CRIT_MELEE_RATING_SHORT", "criticalStrike")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_CRIT_SPELL_RATING", "criticalStrike")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_CRIT_SPELL_RATING_SHORT", "criticalStrike")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_CRIT_RANGED_RATING", "criticalStrike")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_CRIT_RANGED_RATING_SHORT", "criticalStrike")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_HASTE_RATING", "haste")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_HASTE_RATING_SHORT", "haste")
-mapToken(STAT_TOKEN_MAP, "ITEM_MOD_MASTERY_RATING", "mastery")
-mapToken(STAT_TOKEN_MAP, "ITEM_MOD_MASTERY_RATING_SHORT", "mastery")
-mapToken(STAT_TOKEN_MAP, "ITEM_MOD_VERSATILITY", "versatility")
-mapToken(STAT_TOKEN_MAP, "ITEM_MOD_VERSATILITY_SHORT", "versatility")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_LIFESTEAL", "leech")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_AVOIDANCE_RATING", "avoidance")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_SPEED_RATING", "movementSpeed")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_SPEED_RATING_SHORT", "movementSpeed")
--- Classic-era itemization tokens (Forever is original Azeroth).
+-- Classic-era / Forever itemization tokens.
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_ATTACK_POWER", "attackPower")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_ATTACK_POWER_SHORT", "attackPower")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_RANGED_ATTACK_POWER", "rangedAttackPower")
@@ -67,6 +71,21 @@ mapToken(STAT_TOKEN_MAP, "ITEM_MOD_SPELL_DAMAGE_DONE", "spellPower")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_SPELL_HEALING_DONE", "spellHealing")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_SPIRIT", "spirit")
 mapToken(STAT_TOKEN_MAP, "ITEM_MOD_SPIRIT_SHORT", "spirit")
+-- Forever: unified Hit, plus the new Expertise and rebalanced Weapon Skill.
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_HIT_RATING", "hit")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_HIT_RATING_SHORT", "hit")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_HIT_MELEE", "hit")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_HIT_MELEE_SHORT", "hit")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_HIT_SPELL", "hit")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_HIT_SPELL_SHORT", "hit")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_HIT_RANGED", "hit")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_HIT_RANGED_SHORT", "hit")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_EXPERTISE_RATING", "expertise")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_EXPERTISE_RATING_SHORT", "expertise")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_WEAPON_SKILL_RATING", "weaponSkill")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_WEAPON_SKILL_RATING_SHORT", "weaponSkill")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_MELEE_WEAPON_SKILL_RATING", "weaponSkill")
+mapToken(STAT_TOKEN_MAP, "ITEM_MOD_MELEE_WEAPON_SKILL_RATING_SHORT", "weaponSkill")
 
 -- Every stat-shaped XIVWeights feature (weapon features excluded -- those
 -- live under candidate.weapon instead, matching doc section 6's shape).
@@ -75,9 +94,10 @@ mapToken(STAT_TOKEN_MAP, "ITEM_MOD_SPIRIT_SHORT", "spirit")
 local STAT_FEATURES = {
   "strength", "agility", "intellect",
   "stamina", "armor", "bonusArmor",
-  "criticalStrike", "haste", "mastery", "versatility",
+  "criticalStrike", "haste",
   "leech", "avoidance", "movementSpeed", "indestructible",
   "attackPower", "rangedAttackPower", "spellPower", "spellHealing", "spirit",
+  "hit", "expertise", "weaponSkill",
 }
 
 local WEAPON_TOKEN_MAP = {}
