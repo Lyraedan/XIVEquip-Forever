@@ -110,17 +110,11 @@ local function ensure()
   st.Messages.Equip = messageValue(st, "Equip", false)
   st.Messages.Preview = messageValue(st, "Preview", true)
 
-  local specEquip = automationValue(st, "SpecEquip", {
-    { "root", "AutoSpecEquip" },
-    { "automation", "AutoSpec" },
-  }, false)
-  local saveSpecSet = automationValue(st, "SaveSpecSet", {
-    { "automation", "AutoSets" },
-    { "root", "AutoSpecSets" },
-  }, false)
+  -- Automation is disabled in this fork (Forever has no spec switching), so it
+  -- is forced off regardless of any previously saved value.
   st.Automation = type(st.Automation) == "table" and st.Automation or {}
-  st.Automation.SpecEquip = specEquip
-  st.Automation.SaveSpecSet = saveSpecSet
+  st.Automation.SpecEquip = false
+  st.Automation.SaveSpecSet = false
   st.Automation.AutoSpec = nil
   st.Automation.AutoSets = nil
 

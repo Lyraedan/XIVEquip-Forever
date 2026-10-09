@@ -13,7 +13,7 @@ L.NoUpgrades             = "No upgrades found."
 L.ReplacedWith           = "Replaced %s with %s."
 
 -- Startup / status messages
-L.Loaded_Format          = "Loaded v%s. Using %s."
+L.Loaded_Format          = "Loaded v%s. Active build: %s."
 L.Loaded_Default_Pawn    = "Default comparer: Pawn"
 L.Loaded_Default_Ilvl    = "Default comparer: ilvl"
 L.Loaded_Using_Name      = "%s comparer"

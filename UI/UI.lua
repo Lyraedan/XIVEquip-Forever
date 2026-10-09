@@ -50,20 +50,50 @@ local TEX_DISABLED             = "Interface\\AddOns\\XIVEquip\\Assets\\icon_whit
 ---@type Frame
 local btn
 
--- Map Blizzard stat tokens -> Pawn keys and pretty text
+-- Map Blizzard/Forever stat tokens -> display label. `key` is kept for the
+-- optional Pawn-weighted line; `label` is what the tooltip shows. Covers the
+-- full Forever stat vocabulary (primaries, base, power, ratings, tertiary).
 local STAT_TO_PAWN             = {}
 local function mapPawn(tbl, name, key, label)
   for _, k in ipairs(API.TokenKeys(name)) do tbl[k] = { key = key, label = label } end
 end
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_STRENGTH_SHORT", "Strength", "Strength")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_STRENGTH", "Strength", "Strength")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_AGILITY_SHORT", "Agility", "Agility")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_AGILITY", "Agility", "Agility")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_INTELLECT_SHORT", "Intellect", "Intellect")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_INTELLECT", "Intellect", "Intellect")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_STAMINA_SHORT", "Stamina", "Stamina")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_STAMINA", "Stamina", "Stamina")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_ARMOR_SHORT", "Armor", "Armor")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_ARMOR", "Armor", "Armor")
+mapPawn(STAT_TO_PAWN, "RESISTANCE0_NAME", "Armor", "Armor")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_SPIRIT_SHORT", "Spirit", "Spirit")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_SPIRIT", "Spirit", "Spirit")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_ATTACK_POWER_SHORT", "AttackPower", "Attack Power")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_ATTACK_POWER", "AttackPower", "Attack Power")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_RANGED_ATTACK_POWER", "RangedAttackPower", "Ranged Attack Power")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_SPELL_POWER", "SpellPower", "Spell Power")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_SPELL_DAMAGE_DONE", "SpellPower", "Spell Power")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_SPELL_HEALING_DONE", "SpellHealing", "Bonus Healing")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_HIT_RATING_SHORT", "HitRating", "Hit")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_HIT_RATING", "HitRating", "Hit")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_HIT_MELEE_SHORT", "HitRating", "Hit")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_HIT_MELEE", "HitRating", "Hit")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_HIT_SPELL_SHORT", "HitRating", "Hit")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_HIT_RANGED_SHORT", "HitRating", "Hit")
 mapPawn(STAT_TO_PAWN, "ITEM_MOD_CRIT_RATING_SHORT", "CritRating", "Crit")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_CRIT_RATING", "CritRating", "Crit")
 mapPawn(STAT_TO_PAWN, "ITEM_MOD_HASTE_RATING_SHORT", "HasteRating", "Haste")
-mapPawn(STAT_TO_PAWN, "ITEM_MOD_MASTERY_RATING_SHORT", "MasteryRating", "Mastery")
-mapPawn(STAT_TO_PAWN, "ITEM_MOD_VERSATILITY", "Versatility", "Vers")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_HASTE_RATING", "HasteRating", "Haste")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_EXPERTISE_RATING_SHORT", "ExpertiseRating", "Expertise")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_EXPERTISE_RATING", "ExpertiseRating", "Expertise")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_WEAPON_SKILL_RATING_SHORT", "WeaponSkillRating", "Weapon Skill")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_WEAPON_SKILL_RATING", "WeaponSkillRating", "Weapon Skill")
+mapPawn(STAT_TO_PAWN, "ITEM_MOD_MELEE_WEAPON_SKILL_RATING_SHORT", "WeaponSkillRating", "Weapon Skill")
 mapPawn(STAT_TO_PAWN, "ITEM_MOD_LIFESTEAL_SHORT", "Leech", "Leech")
 mapPawn(STAT_TO_PAWN, "ITEM_MOD_AVOIDANCE_RATING_SHORT", "Avoidance", "Avoid")
 mapPawn(STAT_TO_PAWN, "ITEM_MOD_SPEED_RATING_SHORT", "MovementSpeed", "Speed")
-mapPawn(STAT_TO_PAWN, "ITEM_MOD_ATTACK_POWER_SHORT", "AttackPower", "AP")
-mapPawn(STAT_TO_PAWN, "ITEM_MOD_SPELL_POWER", "SpellPower", "SP")
 
 -- GetBoEText: Gets a "BoE" string for item links if necessary.
 local function GetBoEText(itemLink, itemLoc)
@@ -89,20 +119,24 @@ local GetItemStatsCompat =
     -- [XIVEquip-AUTO] No-op placeholder callback used as a safe default.
     function() return nil end
 
+-- statsFor(link): safe GetItemStats lookup; returns {} for non-links (e.g. the
+-- "(None)" placeholder used for empty slots).
+local function statsFor(link)
+  if type(link) ~= "string" or not link:find("item:") then return {} end
+  local ok, stats = pcall(GetItemStatsCompat, link)
+  return (ok and type(stats) == "table") and stats or {}
+end
+
 -- computeStatDiff: UI wiring: compute stat diff.
 local function computeStatDiff(oldLink, newLink)
-  local get = GetItemStatsCompat
+  local a, b = statsFor(oldLink), statsFor(newLink)
   local diff = {}
-  if not get then return diff end
-  local a = get(oldLink) or {}
-  local b = get(newLink) or {}
-  -- union of keys
   local seen = {}
   for k in pairs(a) do seen[k] = true end
   for k in pairs(b) do seen[k] = true end
 
   for k in pairs(seen) do
-    local delta = (b[k] or 0) - (a[k] or 0)
+    local delta = (tonumber(b[k]) or 0) - (tonumber(a[k]) or 0)
     if delta ~= 0 then
       diff[k] = delta
     end

@@ -25,31 +25,33 @@ local function msgLogin(text)
   end
 end
 
-local function currentWeightsLabel()
-  local Runtime = XIVEquip.Planning and XIVEquip.Planning.Runtime
+local function currentBuildLabel()
   local Config = XIVEquip.XIVWeights and XIVEquip.XIVWeights.Config
-  if not (Runtime and Runtime.Live and Config and Config.ResolvedScaleDisplayLabel) then
-    return "Default | current specialization"
+  local build = Config and Config.ActiveBuild and Config.ActiveBuild()
+  local name = (build and build.name and build.name ~= "") and build.name or "Default"
+
+  local scaleLabel
+  local Runtime = XIVEquip.Planning and XIVEquip.Planning.Runtime
+  if Runtime and Runtime.Live and Config and Config.ResolvedScaleDisplayLabel then
+    local runtime = Runtime.Live()
+    if runtime and runtime.ResolveWeights then
+      local ok, scale = pcall(runtime.ResolveWeights)
+      if runtime.Close then pcall(runtime.Close) end
+      if ok and scale then
+        local okLabel, label = pcall(Config.ResolvedScaleDisplayLabel, scale)
+        if okLabel and label and label ~= "" then scaleLabel = label end
+      end
+    end
   end
 
-  local runtime = Runtime.Live()
-  if not (runtime and runtime.ResolveWeights) then
-    return "Default | current specialization"
-  end
-
-  local ok, scale = pcall(runtime.ResolveWeights)
-  if runtime.Close then pcall(runtime.Close) end
-  if not ok or not scale then return "Default | current specialization" end
-
-  local labelOK, label = pcall(Config.ResolvedScaleDisplayLabel, scale)
-  if labelOK and label and label ~= "" then return tostring(label) end
-  return "Default | current specialization"
+  if scaleLabel then return tostring(name) .. " | " .. tostring(scaleLabel) end
+  return tostring(name)
 end
 
-local function msgLoaded(weightsText)
+local function msgLoaded(buildText)
   local version = addonVersion() or "unknown"
-  msgLogin(string.format(L.Loaded_Format or "Loaded v%s. Using %s.", version,
-    tostring(weightsText or "Default | current specialization")))
+  msgLogin(string.format(L.Loaded_Format or "Loaded v%s. Active build: %s.", version,
+    tostring(buildText or "Default")))
 end
 
 -- msgError: msg error.
@@ -96,7 +98,7 @@ f:SetScript("OnEvent", function(_, event, arg1)
       registry:Lock()
     end
 
-    msgLoaded(currentWeightsLabel())
+    msgLoaded(currentBuildLabel())
   end
 end)
 

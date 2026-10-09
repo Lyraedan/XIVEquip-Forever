@@ -852,39 +852,27 @@ end
 
 local function addGeneralSettings(parent, x, y, width)
   local S = XIVEquip.Settings
-  local box = panel(parent, x, y, width, 224)
+  local box = panel(parent, x, y, width, 152)
   sectionTitle(box, "Addon Settings", 14, -14)
   horizontalDivider(box, 14, -34, width - 28)
   sectionTitle(box, "Messages", 14, -48)
-  sectionTitle(box, "Automation", 302, -48)
   local messages = {
     { "Show login message", function() return S:GetMessage("Login") end, function(v) S:SetMessage("Login", v) end },
     { "Show equip messages", function() return S:GetMessage("Equip") end, function(v) S:SetMessage("Equip", v) end },
     { "Debug logging", function() return S:GetDebugEnabled() end, function(v) S:SetDebugEnabled(v) end },
   }
-  local automation = {
-    { "Auto-equip on Spec change", function() return S:GetAutomation("SpecEquip") end, function(v) S:SetAutomation("SpecEquip", v) end },
-    { "Save Equipment sets after auto-equip", function() return S:GetAutomation("SaveSpecSet") end, function(v) S:SetAutomation("SaveSpecSet", v) end },
-  }
   for i, row in ipairs(messages) do
     local cb = checkbox(box, row[1], row[2](), row[3])
     cb:SetPoint("TOPLEFT", 14, -72 - ((i - 1) * 26))
   end
-  for i, row in ipairs(automation) do
-    local cb = checkbox(box, row[1], row[2](), row[3])
-    cb:SetPoint("TOPLEFT", 302, -72 - ((i - 1) * 26))
-  end
-  sectionTitle(box, "Minimap Button", 14, -164)
+  -- Automation and the /xivequip macro helper are disabled for this fork.
+  sectionTitle(box, "Minimap Button", 302, -48)
   local minimap = { "Show minimap button", function() return not S:GetMinimapHidden() end, function(v)
       S:SetMinimapHidden(v ~= true)
       if XIVEquip.UI.MinimapButton and XIVEquip.UI.MinimapButton.Refresh then XIVEquip.UI.MinimapButton.Refresh() end
     end }
   local minimapBox = checkbox(box, minimap[1], minimap[2](), minimap[3])
-  minimapBox:SetPoint("TOPLEFT", 14, -188)
-  sectionTitle(box, "Macro", 302, -164)
-  local macro = button(box, "Create Macro", 150, 22)
-  macro:SetPoint("TOPLEFT", 302, -188)
-  macro:SetScript("OnClick", createEquipMacro)
+  minimapBox:SetPoint("TOPLEFT", 302, -72)
   return box
 end
 
@@ -983,7 +971,12 @@ local function showConfig(content)
       sourceLine = "Custom | " .. tostring(resolution and resolution.scaleLabel or selectedScale.name or specName)
     end
   end
-  local effective = font(page, "GameFontHighlight", "Active Scale: " .. sourceLine)
+  local activeBuildRec = C and C.ActiveBuild and C.ActiveBuild()
+  local buildName = (activeBuildRec and activeBuildRec.name and activeBuildRec.name ~= "")
+      and activeBuildRec.name or "Default"
+  local scaleName = tostring(sourceLine):match("|%s*(.-)%s*$") or tostring(sourceLine)
+  scaleName = scaleName:gsub("%s*%(Fallback%)%s*$", "")
+  local effective = font(page, "GameFontHighlight", "Active Build: " .. tostring(buildName) .. " | " .. scaleName)
   effective:SetPoint("TOPLEFT", character, "BOTTOMLEFT", 0, -6)
   textColor(effective, 0.4, 1, 0.4)
   if resolved and resolved.fallback then textColor(effective, 1, 0.55, 0.2) end
