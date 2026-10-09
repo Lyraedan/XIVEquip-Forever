@@ -57,9 +57,10 @@ their authors. Fork maintained for World of Warcraft: Forever, fork maintained b
 
 ## Preview
 
+<img width="745" height="609" alt="image" src="https://github.com/user-attachments/assets/b4c4e1ef-1b98-4dbe-860e-744907176780" />
 
-@@ -19,4 +61,4 @@ MIT-style. See the file headers or `LICENSE` for details.
+<img width="779" height="958" alt="image" src="https://github.com/user-attachments/assets/90d82ede-1f4a-4a50-a001-5e077c82cf3a" />
 
-<img width="696" height="605" alt="image" src="https://github.com/user-attachments/assets/a2eb3638-cc8c-4f41-9e56-43e60f6e9fd3" />
+<img width="779" height="958" alt="image" src="https://github.com/user-attachments/assets/64633ecb-39b6-47b6-9a10-a764862c2d4d" />
 
-<img width="774" height="957" alt="image" src="https://github.com/user-attachments/assets/3b0c2d8e-58fe-4d65-b8ae-b93a9ae18bd0" />
+
